@@ -39,7 +39,10 @@ asyncio_mode = "auto"
 # strict mode over integrations that claim it. The settings below mirror the
 # strict block core applies to a strict-typed integration.
 [tool.mypy]
-python_version = "3.13"
+# Home Assistant 2026.x is written for 3.14 (parenthesis-free except
+# expressions and the like); a lower target makes mypy stop at HA's own
+# source before it reaches this integration.
+python_version = "3.14"
 strict = true
 warn_return_any = true
 disallow_untyped_defs = true
