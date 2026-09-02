@@ -1,0 +1,7 @@
+{
+    "ok": false,
+    "result": {
+        "error": "ValidatorError",
+        "error_msg": "Failed sub-validator on one of the item of ['health']"
+    }
+}

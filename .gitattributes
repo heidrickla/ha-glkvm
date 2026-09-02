@@ -1,0 +1,20 @@
+# Normalise to LF in the repository and in the working tree.
+#
+# Authoring happens on Windows; anything that runs does so on Linux (the HA OS
+# VM, the forge's runners). A CRLF checkout of a shell script or a YAML document
+# is a different file to every consumer that matters, and the difference is
+# invisible in an editor.
+
+* text=auto eol=lf
+
+*.py   text eol=lf
+*.sh   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.toml text eol=lf
+
+# Never touched.
+*.png  binary
+*.jpg  binary

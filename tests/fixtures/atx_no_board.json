@@ -1,0 +1,12 @@
+{
+    "ok": true,
+    "result": {
+        "busy": false,
+        "enabled": false,
+        "leds": {
+            "hdd": false,
+            "power": false
+        },
+        "power": "off"
+    }
+}

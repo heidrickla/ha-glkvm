@@ -1,0 +1,177 @@
+rules:
+  # Bronze
+  action-setup:
+    status: done
+    comment: |
+      The four actions are registered in async_setup, not per entry, so a call
+      while the entry is unloaded gets a translated refusal.
+  appropriate-polling:
+    status: done
+    comment: |
+      Thirty seconds. Host power, video signal and attached media change at
+      human speed, and the unit's CPU belongs to its video encoder. Each
+      section is read from its own endpoint rather than the bare /api/info,
+      which GL.iNet's firmware makes expensive.
+  brands:
+    status: done
+    comment: |
+      Brand images ship in-repo at custom_components/glkvm/brand/ (generated
+      and size-checked by tools/make_brand.py), which HACS reads first since
+      Home Assistant 2026.3. A core submission would add them to
+      home-assistant/brands instead.
+  common-modules: done
+  config-flow-test-coverage:
+    status: todo
+    comment: |
+      tests/ha/test_config_flow.py covers the user step, the three error
+      mappings, the duplicate abort, reconfigure with its another_device
+      guard, and reauth. Marked done once the `Home Assistant layer` job of
+      .gitea/workflows/validate.yml has executed it green.
+  config-flow: done
+  dependency-transparency:
+    status: exempt
+    comment: |
+      No external dependency. requirements is empty; the client is aiohttp
+      (already in Home Assistant) plus the standard library.
+  docs-actions: done
+  docs-conditions:
+    status: exempt
+    comment: This integration provides no conditions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  docs-triggers:
+    status: exempt
+    comment: This integration provides no triggers.
+  entity-event-setup:
+    status: done
+    comment: |
+      Entities are coordinator-driven; CoordinatorEntity subscribes in
+      async_added_to_hass and unsubscribes on removal. The Wake-on-LAN
+      listener is registered through entry.async_on_unload.
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure:
+    status: done
+    comment: |
+      The flow calls /api/auth/check and then reads the unit's identity before
+      creating the entry, so a wrong password or a wrong address is caught on
+      the form.
+  test-before-setup:
+    status: done
+    comment: |
+      async_config_entry_first_refresh raises ConfigEntryNotReady while the
+      unit is unreachable and ConfigEntryAuthFailed when it refuses the
+      credentials.
+  unique-config-entry:
+    status: done
+    comment: The unit's serial number is the unique id, so a moved unit is not added twice.
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters:
+    status: exempt
+    comment: |
+      There are no options. Everything configurable (address, port,
+      credentials, certificate check) is entry data, changed through the
+      reconfigure flow, and documented as installation parameters.
+  docs-installation-parameters: done
+  entity-unavailable:
+    status: done
+    comment: |
+      Coordinator failure marks everything unavailable. Beyond that, ATX
+      entities are unavailable without an ATX board, media entities while
+      the gadget is offline, and the camera and capture sensors while the
+      streamer is stopped - each a real state the unit reports.
+  integration-owner: done
+  log-when-unavailable:
+    status: done
+    comment: The coordinator logs an unreachable unit once, via UpdateFailed.
+  parallel-updates: done
+  reauthentication-flow:
+    status: done
+    comment: |
+      A 401 on any poll raises ConfigEntryAuthFailed and stops polling, which
+      also keeps the integration out of GL.iNet's failed-login lockout.
+  test-coverage:
+    status: todo
+    comment: |
+      The client and models have pure tests against bodies recorded from a
+      GL-RM10 on firmware 1.10.0; the Home Assistant layer covers setup,
+      entities, commands, actions and repair issues. Marked done once the
+      `Home Assistant layer` job has executed both suites green.
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: todo
+    comment: |
+      The unit runs an mDNS responder (GL.iNet's gl_mdns / mdnsd), but the
+      service type and TXT records have not been measured from a LAN vantage
+      point, and the serial that would key the discovered entry is behind
+      authentication on stock firmware. Implement once measured; do not
+      guess a service type.
+  discovery-update-info:
+    status: todo
+    comment: Follows discovery.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: |
+      One entry is one KVM. The things that come and go - Wake-on-LAN
+      targets, GPIO channels - are entities on that device, and the WOL set
+      is kept in step with the unit by a coordinator listener.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default:
+    status: done
+    comment: |
+      Memory available, both network rates and the H.264 bitrate are
+      disabled by default: useful when chasing a problem on the unit, noise
+      on a dashboard otherwise.
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow: done
+  repair-issues:
+    status: done
+    comment: |
+      Two, each for a firmware state with a known fix the user has to apply
+      on the unit: the streamer not running (camera has no picture) and the
+      mass-storage gadget offline (stock 1.10.0 ships it unlinked).
+  stale-devices:
+    status: exempt
+    comment: |
+      A single device removed with the entry. Entities for Wake-on-LAN
+      targets removed on the unit are taken out of the entity registry on
+      the next poll.
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: |
+      The client is asyncio on aiohttp, in-repo (api.py and models.py, free
+      of Home Assistant imports). When it is lifted into a PyPI package for a
+      core submission it stays async.
+  inject-websession:
+    status: done
+    comment: |
+      Home Assistant's shared aiohttp session, via async_get_clientsession
+      with the entry's verify_ssl. Authentication is per-request headers, so
+      there is no cookie jar that would need isolating.
+  strict-typing:
+    status: todo
+    comment: |
+      mypy --strict is configured in pyproject.toml and passes locally, but
+      without Home Assistant installed every HA class is Any and the check
+      is weaker than it looks. Marked done once the CI job with Home
+      Assistant installed has run it green.

@@ -1,0 +1,284 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GL.iNet KVM",
+        "description": "Connect to a GL.iNet Comet KVM on your local network.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify the KVM's certificate"
+        },
+        "data_description": {
+          "host": "The KVM's LAN address. Use the IP address rather than a .local name if you have more than one unit.",
+          "port": "443 unless you have moved the web interface.",
+          "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
+          "password": "The KVM's password. Leave empty if the unit has authentication disabled.",
+          "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+        }
+      },
+      "reconfigure": {
+        "title": "GL.iNet KVM",
+        "description": "Change the KVM's address, port or credentials.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify the KVM's certificate"
+        },
+        "data_description": {
+          "host": "The KVM's LAN address.",
+          "port": "443 unless you have moved the web interface.",
+          "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
+          "password": "The KVM's password.",
+          "verify_ssl": "Leave off unless you have installed your own trusted certificate."
+        }
+      },
+      "reauth_confirm": {
+        "title": "GL.iNet KVM",
+        "description": "The KVM at {host} rejected the credentials. Enter them again.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "The KVM's login.",
+          "password": "The KVM's password."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The KVM rejected the username or password.",
+      "cannot_connect": "Could not reach a KVM at that address.",
+      "unknown": "Unexpected error talking to the KVM."
+    },
+    "abort": {
+      "already_configured": "This KVM is already configured.",
+      "another_device": "That address answers as a different KVM than this entry was set up for.",
+      "reconfigure_successful": "The KVM was reconfigured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "video_signal": {
+        "name": "Video signal"
+      },
+      "keyboard_online": {
+        "name": "Keyboard connected"
+      },
+      "mouse_online": {
+        "name": "Mouse connected"
+      },
+      "gpio_input": {
+        "name": "{channel}"
+      }
+    },
+    "sensor": {
+      "capture_resolution": {
+        "name": "Capture resolution"
+      },
+      "capture_fps": {
+        "name": "Capture frame rate"
+      },
+      "stream_clients": {
+        "name": "Stream clients"
+      },
+      "h264_bitrate": {
+        "name": "H.264 bitrate"
+      },
+      "media_storage_free": {
+        "name": "Media storage free"
+      },
+      "cpu_temperature": {
+        "name": "CPU temperature"
+      },
+      "cpu_usage": {
+        "name": "CPU usage"
+      },
+      "memory_usage": {
+        "name": "Memory usage"
+      },
+      "memory_available": {
+        "name": "Memory available"
+      },
+      "network_rx_rate": {
+        "name": "Network receive rate"
+      },
+      "network_tx_rate": {
+        "name": "Network transmit rate"
+      }
+    },
+    "switch": {
+      "host_power": {
+        "name": "Host power"
+      },
+      "virtual_media": {
+        "name": "Virtual media attached"
+      },
+      "mouse_jiggler": {
+        "name": "Mouse jiggler"
+      },
+      "gpio_output": {
+        "name": "{channel}"
+      }
+    },
+    "button": {
+      "power_button": {
+        "name": "Power button"
+      },
+      "power_long": {
+        "name": "Hold power button"
+      },
+      "reset": {
+        "name": "Reset"
+      },
+      "hid_reset": {
+        "name": "Reset keyboard and mouse"
+      },
+      "gpio_pulse": {
+        "name": "{channel}"
+      },
+      "wake": {
+        "name": "Wake {target}"
+      }
+    },
+    "select": {
+      "virtual_media_image": {
+        "name": "Virtual media image"
+      },
+      "mouse_output": {
+        "name": "Mouse mode",
+        "state": {
+          "usb": "Absolute",
+          "usb_rel": "Relative",
+          "usb_hybrid": "Hybrid",
+          "usb_touch": "Touch"
+        }
+      }
+    },
+    "camera": {
+      "screen": {
+        "name": "Screen"
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "The KVM {name} is not loaded, so this action cannot run."
+    },
+    "entry_not_found": {
+      "message": "No GL.iNet KVM is configured with the id {entry_id}."
+    },
+    "auth_failed": {
+      "message": "The KVM rejected the credentials: {error}"
+    },
+    "command_failed": {
+      "message": "The KVM did not carry out the command: {error}"
+    },
+    "no_image_selected": {
+      "message": "No virtual media image is selected. Choose one with the Virtual media image select first."
+    },
+    "media_connected": {
+      "message": "The virtual media is attached to the host. Detach it before changing the image."
+    },
+    "no_keys": {
+      "message": "At least one key name is required."
+    },
+    "invalid_mac": {
+      "message": "{mac} is not a MAC address."
+    },
+    "no_atx": {
+      "message": "No ATX board is attached to this KVM, so it cannot control the host's power."
+    }
+  },
+  "issues": {
+    "streamer_stopped": {
+      "title": "The video streamer on {name} is not running",
+      "description": "The KVM's own video streamer is stopped, so the Screen camera has no picture and the capture sensors are unavailable. On GL.iNet firmware the streamer only runs while the GL.iNet web interface is watching. To keep it running, add `kvmd: {streamer: {forever: true}}` to /etc/kvmd/override.yaml on the unit and restart kvmd. This clears itself once the streamer is running again."
+    },
+    "msd_offline": {
+      "title": "Virtual media is offline on {name}",
+      "description": "The KVM reports its mass-storage gadget as offline, so no image can be attached to the host. GL.iNet firmware 1.10.0 ships the mass-storage functions unlinked from the USB gadget; adding `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` to /etc/kvmd/override.yaml and rebooting the unit fixes it. This clears itself once the gadget is online."
+    }
+  },
+  "selector": {
+    "power_action": {
+      "options": {
+        "on": "Power on",
+        "off": "Shut down (ACPI)",
+        "off_hard": "Force power off",
+        "reset_hard": "Reset"
+      }
+    }
+  },
+  "services": {
+    "type_text": {
+      "name": "Type text",
+      "description": "Types text into the attached host over the KVM's USB keyboard.",
+      "fields": {
+        "config_entry_id": {
+          "name": "KVM",
+          "description": "The KVM whose host to type into."
+        },
+        "text": {
+          "name": "Text",
+          "description": "What to type. Newlines are sent as Enter."
+        },
+        "slow": {
+          "name": "Slow",
+          "description": "Type with a delay between keys, for hosts that drop fast input."
+        }
+      }
+    },
+    "send_keys": {
+      "name": "Send keys",
+      "description": "Presses a combination of keys together on the attached host, then releases them.",
+      "fields": {
+        "config_entry_id": {
+          "name": "KVM",
+          "description": "The KVM whose host to send the keys to."
+        },
+        "keys": {
+          "name": "Keys",
+          "description": "Key names as the KVM uses them, such as ControlLeft, AltLeft, Delete, MetaLeft, KeyR, Enter, F5."
+        }
+      }
+    },
+    "wake": {
+      "name": "Wake on LAN",
+      "description": "Sends a Wake-on-LAN packet from the KVM to a machine on its network.",
+      "fields": {
+        "config_entry_id": {
+          "name": "KVM",
+          "description": "The KVM to send the packet from."
+        },
+        "mac": {
+          "name": "MAC address",
+          "description": "The MAC address of the machine to wake."
+        }
+      }
+    },
+    "power": {
+      "name": "Host power",
+      "description": "Controls the attached host's power through the KVM's ATX board.",
+      "fields": {
+        "config_entry_id": {
+          "name": "KVM",
+          "description": "The KVM whose host to control."
+        },
+        "action": {
+          "name": "Action",
+          "description": "Power on, ask the OS to shut down, force power off, or reset."
+        },
+        "wait": {
+          "name": "Wait",
+          "description": "Wait for the KVM to finish the action before returning."
+        }
+      }
+    }
+  }
+}

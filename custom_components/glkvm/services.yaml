@@ -1,0 +1,71 @@
+# Names and descriptions live in strings.json (the translatable layer); this
+# file carries only structure.
+type_text:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: glkvm
+    text:
+      required: true
+      example: "echo hello"
+      selector:
+        text:
+          multiline: true
+    slow:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+send_keys:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: glkvm
+    keys:
+      required: true
+      example: '["ControlLeft", "AltLeft", "Delete"]'
+      selector:
+        text:
+          multiple: true
+
+wake:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: glkvm
+    mac:
+      required: true
+      example: "aa:bb:cc:dd:ee:ff"
+      selector:
+        text:
+
+power:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: glkvm
+    action:
+      required: true
+      default: "on"
+      selector:
+        select:
+          translation_key: power_action
+          options:
+            - "on"
+            - "off"
+            - "off_hard"
+            - "reset_hard"
+    wait:
+      required: false
+      default: true
+      selector:
+        boolean:

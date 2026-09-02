@@ -1,0 +1,48 @@
+{
+    "ok": true,
+    "result": {
+        "available_devices": {
+            "/dev/mmcblk0p10": {
+                "filesystem": "exfat",
+                "is_current": true,
+                "label": "GLKVM",
+                "size": 28801204224,
+                "uuid": "95B2-489F"
+            }
+        },
+        "busy": false,
+        "drive": {
+            "cdrom": true,
+            "connected": false,
+            "image": null,
+            "rw": false
+        },
+        "drive_partition": {
+            "cdrom": false,
+            "connected": false,
+            "image": null,
+            "rw": true
+        },
+        "enabled": true,
+        "online": true,
+        "storage": {
+            "downloading": null,
+            "images": {
+                "System Volume Information/IndexerVolumeGuid": {
+                    "complete": true,
+                    "mod_ts": 1788295852.0,
+                    "removable": true,
+                    "size": 76
+                }
+            },
+            "parts": {
+                "": {
+                    "free": 28797337600,
+                    "size": 28797599744,
+                    "writable": true
+                }
+            },
+            "uploading": null
+        }
+    }
+}

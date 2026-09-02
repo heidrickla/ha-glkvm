@@ -1,0 +1,40 @@
+{
+    "ok": true,
+    "result": {
+        "busy": false,
+        "connected": true,
+        "enabled": true,
+        "jiggler": {
+            "active": false,
+            "enabled": true,
+            "interval": 20,
+            "schedule": []
+        },
+        "keyboard": {
+            "leds": {
+                "caps": false,
+                "num": true,
+                "scroll": false
+            },
+            "online": true,
+            "outputs": {
+                "active": "",
+                "available": []
+            }
+        },
+        "mouse": {
+            "absolute": true,
+            "online": true,
+            "outputs": {
+                "active": "usb",
+                "available": [
+                    "usb",
+                    "usb_rel",
+                    "usb_hybrid",
+                    "usb_touch"
+                ]
+            }
+        },
+        "online": true
+    }
+}

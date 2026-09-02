@@ -1,0 +1,40 @@
+name: Validate
+
+# Required for a HACS default-store submission. Both jobs must be GREEN BEFORE
+# the release is tagged - HACS checks the order the artifacts were created in,
+# so a release cut before CI passes fails review even though the repo later
+# turns green. See PUBLISHING.md.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+# Gitea's act_runner also picks up .github/workflows, so every job here is
+# gated to GitHub. On the gitea forge these skip instantly and
+# .gitea/workflows/validate.yml is the one that runs - the runner is shared
+# with capacity 1 and duplicate jobs queue behind each other.
+
+jobs:
+  hacs:
+    if: github.server_url == 'https://github.com'
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # No `ignore:` key on purpose. The hacs/default pull-request template
+          # asks explicitly whether any check was ignored, and ignoring one is
+          # a reason for rejection.
+
+  hassfest:
+    if: github.server_url == 'https://github.com'
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master

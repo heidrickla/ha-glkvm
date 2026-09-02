@@ -1,0 +1,118 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "video_signal": {
+        "default": "mdi:monitor",
+        "state": {
+          "off": "mdi:monitor-off"
+        }
+      },
+      "keyboard_online": {
+        "default": "mdi:keyboard",
+        "state": {
+          "off": "mdi:keyboard-off"
+        }
+      },
+      "mouse_online": {
+        "default": "mdi:mouse",
+        "state": {
+          "off": "mdi:mouse-off"
+        }
+      },
+      "gpio_input": {
+        "default": "mdi:electric-switch"
+      }
+    },
+    "sensor": {
+      "capture_resolution": {
+        "default": "mdi:monitor-screenshot"
+      },
+      "capture_fps": {
+        "default": "mdi:filmstrip"
+      },
+      "stream_clients": {
+        "default": "mdi:account-eye"
+      },
+      "h264_bitrate": {
+        "default": "mdi:video-wireless"
+      },
+      "media_storage_free": {
+        "default": "mdi:harddisk"
+      },
+      "cpu_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "cpu_usage": {
+        "default": "mdi:chip"
+      },
+      "memory_usage": {
+        "default": "mdi:memory"
+      },
+      "memory_available": {
+        "default": "mdi:memory"
+      },
+      "network_rx_rate": {
+        "default": "mdi:download-network"
+      },
+      "network_tx_rate": {
+        "default": "mdi:upload-network"
+      }
+    },
+    "switch": {
+      "host_power": {
+        "default": "mdi:power"
+      },
+      "virtual_media": {
+        "default": "mdi:usb-flash-drive",
+        "state": {
+          "off": "mdi:usb-flash-drive-outline"
+        }
+      },
+      "mouse_jiggler": {
+        "default": "mdi:mouse-move-vertical"
+      },
+      "gpio_output": {
+        "default": "mdi:toggle-switch"
+      }
+    },
+    "button": {
+      "power_button": {
+        "default": "mdi:power"
+      },
+      "power_long": {
+        "default": "mdi:power-off"
+      },
+      "reset": {
+        "default": "mdi:restart"
+      },
+      "hid_reset": {
+        "default": "mdi:keyboard-settings"
+      },
+      "gpio_pulse": {
+        "default": "mdi:gesture-tap-button"
+      },
+      "wake": {
+        "default": "mdi:power-sleep"
+      }
+    },
+    "select": {
+      "virtual_media_image": {
+        "default": "mdi:disc"
+      },
+      "mouse_output": {
+        "default": "mdi:mouse-variant"
+      }
+    },
+    "camera": {
+      "screen": {
+        "default": "mdi:monitor-eye"
+      }
+    }
+  },
+  "services": {
+    "type_text": "mdi:keyboard-variant",
+    "send_keys": "mdi:keyboard-outline",
+    "wake": "mdi:power-sleep",
+    "power": "mdi:power"
+  }
+}

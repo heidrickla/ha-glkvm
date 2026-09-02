@@ -1,0 +1,32 @@
+{
+    "ok": true,
+    "result": {
+        "busy": false,
+        "drive": {
+            "cdrom": true,
+            "connected": false,
+            "image": null,
+            "rw": false
+        },
+        "drive_partition": {
+            "cdrom": false,
+            "connected": false,
+            "image": null,
+            "rw": true
+        },
+        "enabled": true,
+        "online": false,
+        "storage": {
+            "downloading": null,
+            "images": {},
+            "parts": {
+                "": {
+                    "free": 28797337600,
+                    "size": 28797599744,
+                    "writable": true
+                }
+            },
+            "uploading": null
+        }
+    }
+}

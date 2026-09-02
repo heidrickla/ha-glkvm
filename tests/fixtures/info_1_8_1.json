@@ -1,0 +1,39 @@
+{
+    "ok": true,
+    "result": {
+        "auth": {
+            "enabled": true
+        },
+        "extras": {},
+        "meta": {
+            "kvm": {},
+            "server": {
+                "host": "localhost.localdomain"
+            }
+        },
+        "system": {
+            "kernel": {
+                "machine": "aarch64",
+                "release": "6.1.141",
+                "system": "Linux",
+                "version": "#1 SMP"
+            },
+            "kvmd": {
+                "version": "4.82"
+            },
+            "platform": {
+                "base": "Rockchip RV1126B-P EVB V14 Board",
+                "board": "rpi4",
+                "model": "v3",
+                "serial": "0123456789ABCDEF",
+                "type": "rpi",
+                "video": "hdmi"
+            },
+            "streamer": {
+                "app": "ustreamer",
+                "features": {},
+                "version": "6.13"
+            }
+        }
+    }
+}

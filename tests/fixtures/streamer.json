@@ -1,0 +1,79 @@
+{
+    "ok": true,
+    "result": {
+        "features": {
+            "h264": true,
+            "h265": true,
+            "quality": true,
+            "resolution": false,
+            "venc_mode": true,
+            "zero_delay": true
+        },
+        "limits": {
+            "desired_fps": {
+                "max": 70,
+                "min": 0
+            },
+            "h264_bitrate": {
+                "max": 20000,
+                "min": 0
+            },
+            "h264_gop": {
+                "max": 240,
+                "min": 0
+            }
+        },
+        "params": {
+            "desired_fps": 30,
+            "h264_bitrate": 2000,
+            "h264_gop": 30,
+            "quality": 70,
+            "venc_mode": "smart",
+            "video_format": 0,
+            "zero_delay": false
+        },
+        "snapshot": {
+            "saved": null
+        },
+        "streamer": {
+            "encoder": {
+                "quality": 80,
+                "type": "RV1126-H264"
+            },
+            "h264": {
+                "bitrate": 20000000,
+                "fps": 60,
+                "gop": 30,
+                "online": true
+            },
+            "hdmi": {
+                "out_signal": false,
+                "signal": true
+            },
+            "instance_id": "",
+            "sinks": {
+                "h264": {
+                    "has_clients": true
+                },
+                "jpeg": {
+                    "has_clients": false
+                }
+            },
+            "source": {
+                "captured_fps": 60,
+                "desired_fps": 0,
+                "online": true,
+                "real_resolution": "2560x1440@60",
+                "resolution": {
+                    "height": 1440,
+                    "width": 2560
+                }
+            },
+            "stream": {
+                "clients": 0,
+                "clients_stat": {},
+                "queued_fps": 0
+            }
+        }
+    }
+}

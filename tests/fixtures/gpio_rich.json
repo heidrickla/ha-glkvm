@@ -1,0 +1,70 @@
+{
+    "ok": true,
+    "result": {
+        "model": {
+            "scheme": {
+                "inputs": {
+                    "door": {
+                        "hw": {
+                            "driver": "gpio",
+                            "pin": "17"
+                        },
+                        "debounce": 0.1
+                    }
+                },
+                "outputs": {
+                    "demo_button": {
+                        "hw": {
+                            "driver": "demo",
+                            "pin": "0"
+                        },
+                        "pulse": {
+                            "delay": 0.1,
+                            "max_delay": 0.1,
+                            "min_delay": 0.1
+                        },
+                        "switch": false
+                    },
+                    "relay": {
+                        "hw": {
+                            "driver": "gpio",
+                            "pin": "27"
+                        },
+                        "pulse": {
+                            "delay": 0,
+                            "max_delay": 0,
+                            "min_delay": 0
+                        },
+                        "switch": true
+                    }
+                }
+            },
+            "view": {
+                "header": {
+                    "title": []
+                },
+                "table": []
+            }
+        },
+        "state": {
+            "inputs": {
+                "door": {
+                    "online": true,
+                    "state": true
+                }
+            },
+            "outputs": {
+                "demo_button": {
+                    "busy": false,
+                    "online": true,
+                    "state": false
+                },
+                "relay": {
+                    "busy": false,
+                    "online": true,
+                    "state": false
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,45 @@
+{
+    "ok": true,
+    "result": {
+        "busy": false,
+        "drive": {
+            "cdrom": true,
+            "connected": true,
+            "image": {
+                "complete": true,
+                "mod_ts": 1788295852.0,
+                "name": "ubuntu.iso",
+                "removable": true,
+                "size": 2147483648
+            },
+            "rw": false
+        },
+        "drive_partition": {
+            "cdrom": false,
+            "connected": false,
+            "image": null,
+            "rw": true
+        },
+        "enabled": true,
+        "online": true,
+        "storage": {
+            "downloading": null,
+            "images": {
+                "ubuntu.iso": {
+                    "complete": true,
+                    "mod_ts": 1788295852.0,
+                    "removable": true,
+                    "size": 2147483648
+                }
+            },
+            "parts": {
+                "": {
+                    "free": 25914884096,
+                    "size": 28797599744,
+                    "writable": true
+                }
+            },
+            "uploading": null
+        }
+    }
+}

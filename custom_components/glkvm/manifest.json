@@ -1,0 +1,14 @@
+{
+  "domain": "glkvm",
+  "name": "GL.iNet KVM",
+  "version": "0.1.0",
+  "documentation": "https://github.com/heidrickla/ha-glkvm",
+  "issue_tracker": "https://github.com/heidrickla/ha-glkvm/issues",
+  "codeowners": [
+    "@heidrickla"
+  ],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "integration_type": "device",
+  "requirements": []
+}

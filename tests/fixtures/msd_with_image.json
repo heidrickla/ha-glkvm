@@ -1,0 +1,72 @@
+{
+    "ok": true,
+    "result": {
+        "available_devices": {
+            "/dev/mmcblk0p10": {
+                "filesystem": "exfat",
+                "is_current": true,
+                "label": "GLKVM",
+                "size": 28801204224,
+                "uuid": "95B2-489F"
+            }
+        },
+        "busy": false,
+        "drive": {
+            "cdrom": true,
+            "connected": false,
+            "image": {
+                "complete": true,
+                "mod_ts": 1788295852.0,
+                "name": "ubuntu.iso",
+                "removable": true,
+                "size": 2147483648
+            },
+            "rw": false
+        },
+        "drive_partition": {
+            "cdrom": false,
+            "connected": false,
+            "image": null,
+            "rw": true
+        },
+        "enabled": true,
+        "online": true,
+        "storage": {
+            "downloading": null,
+            "images": {
+                "System Volume Information/IndexerVolumeGuid": {
+                    "complete": true,
+                    "mod_ts": 1788295852.0,
+                    "removable": true,
+                    "size": 76
+                },
+                "rescue.iso": {
+                    "complete": true,
+                    "mod_ts": 1788295900.0,
+                    "removable": true,
+                    "size": 734003200
+                },
+                "ubuntu.iso": {
+                    "complete": true,
+                    "mod_ts": 1788295852.0,
+                    "removable": true,
+                    "size": 2147483648
+                },
+                "upload-in-progress.iso": {
+                    "complete": false,
+                    "mod_ts": 1788296000.0,
+                    "removable": true,
+                    "size": 1048576
+                }
+            },
+            "parts": {
+                "": {
+                    "free": 25914884096,
+                    "size": 28797599744,
+                    "writable": true
+                }
+            },
+            "uploading": null
+        }
+    }
+}

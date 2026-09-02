@@ -1,0 +1,127 @@
+name: Validate
+
+# Runs on a self-hosted act_runner.
+#
+#
+# THE RUNNER IS SHARED AND ITS CAPACITY IS 1. Other agent sessions queue behind
+# anything pushed here, so an ordinary push runs ONE fast job. Anything that
+# installs Home Assistant is workflow_dispatch only.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint and structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned: an unpinned linter makes CI non-reproducible.
+      - name: Install ruff (PINNED)
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet "ruff==0.15.21"
+          python3 -m ruff --version
+
+      - name: Ruff
+        run: |
+          python3 -m ruff check .
+          python3 -m ruff format --check .
+
+      # No ast.parse step here on purpose. The runner image ships Python
+      # 3.10.12 and this integration uses PEP 695 `type X = ...`, which that
+      # interpreter cannot parse. Ruff already parses every file at py313, and
+      # tools/validate_local.py runs in the 3.13 job below.
+      - name: JSON is valid
+        run: |
+          for f in custom_components/glkvm/*.json custom_components/glkvm/translations/*.json hacs.json; do
+            python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$f" || exit 1
+          done
+          echo "all JSON valid"
+
+      - name: Manifest sanity
+        run: |
+          python3 - <<'PY'
+          import json
+          m = json.load(open("custom_components/glkvm/manifest.json", encoding="utf-8"))
+          missing = [k for k in ("domain","name","version","documentation","codeowners") if not m.get(k)]
+          assert not missing, f"manifest missing: {missing}"
+          assert m["domain"] == "glkvm", m["domain"]
+          # A custom integration without a version silently fails to load.
+          assert m["version"], "version is required for a custom integration"
+          assert "quality_scale" not in m, "the badge is core-only"
+          print("manifest ok:", m["domain"], m["version"])
+          PY
+
+      - name: Quality scale is complete and honest
+        run: |
+          python3 -m pip install --quiet "PyYAML==6.0.2"
+          python3 - <<'PY'
+          import json, yaml
+          rules = yaml.safe_load(open(
+              "custom_components/glkvm/quality_scale.yaml", encoding="utf-8"))["rules"]
+          todo = sorted(k for k, v in rules.items()
+                        if isinstance(v, dict) and v.get("status") == "todo")
+          for name, v in rules.items():
+              if isinstance(v, dict):
+                  assert v.get("status") in {"done","todo","exempt"}, name
+                  if v.get("status") != "done":
+                      assert str(v.get("comment","")).strip(), f"{name}: needs a reason"
+              else:
+                  assert v == "done", name
+          claimed = json.load(open(
+              "custom_components/glkvm/manifest.json", encoding="utf-8")
+          ).get("quality_scale")
+          assert not (claimed and todo), f"manifest claims {claimed} with todo: {todo}"
+          print(f"{len(rules)} rules; still todo: {', '.join(todo) or 'none'}")
+          PY
+
+  # Installs Home Assistant, so it is manual only and never occupies the shared
+  # runner on an ordinary push. This is the job that runs tests/ha/ and the
+  # strict mypy that means something.
+  home-assistant:
+    name: Home Assistant layer
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image ships 3.10; Home Assistant needs 3.13.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            pytest pytest-asyncio "mypy==1.18.2" "PyYAML==6.0.2" Pillow \
+            pytest-homeassistant-custom-component
+
+      - name: Pure tests (client + models, no Home Assistant)
+        run: python -m pytest tests/test_models.py tests/test_api.py -q -p no:homeassistant
+
+      - name: Home Assistant layer tests
+        run: python -m pytest tests/ha -q
+
+      - name: mypy strict
+        run: python -m mypy custom_components/glkvm
+
+      - name: Offline HACS and hassfest checks
+        run: python tools/validate_local.py
+
+  hacs:
+    name: hassfest + HACS
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+        continue-on-error: true
+      - uses: hacs/action@main
+        continue-on-error: true
+        with:
+          category: integration

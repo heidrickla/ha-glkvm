@@ -1,0 +1,59 @@
+{
+    "ok": true,
+    "result": {
+        "model": {
+            "scheme": {
+                "inputs": {},
+                "outputs": {
+                    "demo_button": {
+                        "hw": {
+                            "driver": "demo",
+                            "pin": "0"
+                        },
+                        "pulse": {
+                            "delay": 0.1,
+                            "max_delay": 0.1,
+                            "min_delay": 0.1
+                        },
+                        "switch": false
+                    }
+                }
+            },
+            "view": {
+                "header": {
+                    "title": [
+                        {
+                            "text": "GPIO",
+                            "type": "label"
+                        }
+                    ]
+                },
+                "table": [
+                    [
+                        {
+                            "text": "Demo",
+                            "type": "label"
+                        },
+                        {
+                            "channel": "demo_button",
+                            "confirm": false,
+                            "hide": false,
+                            "text": "Click",
+                            "type": "output"
+                        }
+                    ]
+                ]
+            }
+        },
+        "state": {
+            "inputs": {},
+            "outputs": {
+                "demo_button": {
+                    "busy": false,
+                    "online": true,
+                    "state": false
+                }
+            }
+        }
+    }
+}
