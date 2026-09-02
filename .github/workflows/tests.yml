@@ -22,9 +22,12 @@ jobs:
       # 0.13.357 pins Home Assistant 2026.8.3; it brings pytest, its asyncio
       # and aiohttp plugins, PyYAML and Pillow with it (pinning those again
       # here makes pip's resolution impossible).
+      # PyTurboJPEG, av and numpy: the camera and stream components' own
+      # requirements, needed to import the camera platform under test.
       - run: |
           python -m pip install --upgrade pip
           python -m pip install "mypy==1.18.2" "ruff==0.15.21" \
+            "PyTurboJPEG==1.8.3" "av==17.0.1" "numpy==2.3.2" \
             "pytest-homeassistant-custom-component==0.13.357"
       - run: ruff check .
       - run: ruff format --check .

@@ -111,10 +111,16 @@ jobs:
           .venv-pure/bin/python -m pip install --quiet pytest "aiohttp==3.14.3"
           # PyYAML and Pillow are not pinned here: Home Assistant pins both,
           # and a second pin of either makes pip's resolution impossible.
+          #
+          # PyTurboJPEG, av and numpy are the camera and stream components'
+          # own requirements, which Home Assistant installs at runtime and the
+          # test harness does not; importing the camera platform needs them.
+          # Pinned to the versions in the 2026.8.3 manifests.
           python -m venv .venv
           .venv/bin/python -m pip install --quiet --upgrade pip
           .venv/bin/python -m pip install --quiet \
             "mypy==1.18.2" Pillow \
+            "PyTurboJPEG==1.8.3" "av==17.0.1" "numpy==2.3.2" \
             "pytest-homeassistant-custom-component==0.13.357"
 
       # Only pytest and aiohttp exist in this environment, so a Home Assistant
