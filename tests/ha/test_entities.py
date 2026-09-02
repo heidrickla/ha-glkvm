@@ -1,13 +1,9 @@
 """The entities and actions: what they read, and what they send."""
 
-from datetime import timedelta
-
 import pytest
 from homeassistant.components.camera import async_get_image
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.glkvm.api import GlkvmAuthError, GlkvmResponseError
 from custom_components.glkvm.const import (
@@ -29,8 +25,9 @@ from tests.pure import result
 from .conftest import SERIAL, WOL_MAC, setup_entry
 
 
-async def _poll(hass) -> None:
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+async def _poll(hass, entry) -> None:
+    """Run the coordinator's poll, as the 30 s timer would."""
+    await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
 
 
@@ -201,14 +198,14 @@ async def test_wake_button_and_its_lifecycle(hass, fake_client, config_entry):
 
     # Removed on the unit: removed from the registry on the next poll.
     fake_client.wol = ()
-    await _poll(hass)
+    await _poll(hass, config_entry)
     registry = er.async_get(hass)
     unique_id = f"{SERIAL}_wake_{WOL_MAC.replace(':', '')}"
     assert registry.async_get_entity_id("button", DOMAIN, unique_id) is None
 
     # Added back: a button again.
     fake_client.wol = FakeWol.targets()
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert registry.async_get_entity_id("button", DOMAIN, unique_id) is not None
 
 

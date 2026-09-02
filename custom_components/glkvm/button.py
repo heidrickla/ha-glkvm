@@ -6,14 +6,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from homeassistant.components.button import (
-    DOMAIN as BUTTON_DOMAIN,
-)
-from homeassistant.components.button import (
     ButtonDeviceClass,
     ButtonEntity,
     ButtonEntityDescription,
 )
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -111,7 +108,7 @@ async def async_setup_entry(
             known.update(t.mac for t in added)
         for mac in [mac for mac in known if mac not in current]:
             entity_id = registry.async_get_entity_id(
-                BUTTON_DOMAIN, DOMAIN, f"{coordinator.unique_id}_{_wake_key(mac)}"
+                Platform.BUTTON, DOMAIN, f"{coordinator.unique_id}_{_wake_key(mac)}"
             )
             if entity_id:
                 registry.async_remove(entity_id)

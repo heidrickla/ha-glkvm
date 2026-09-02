@@ -1,11 +1,7 @@
 """Setup, unload, the two failure modes, and the repair issues."""
 
-from datetime import timedelta
-
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.glkvm.api import GlkvmAuthError, GlkvmConnectionError
 from custom_components.glkvm.const import (
@@ -23,9 +19,14 @@ from tests.pure import result
 from .conftest import setup_entry
 
 
-async def _poll(hass, times: int = 1) -> None:
+async def _poll(hass, entry, times: int = 1) -> None:
+    """Run the coordinator's poll, as the 30 s timer would.
+
+    Driven directly rather than through the loop's timers, so what is tested
+    is the poll and not the harness's clock.
+    """
     for _ in range(times):
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+        await entry.runtime_data.async_refresh()
         await hass.async_block_till_done()
 
 
@@ -117,7 +118,7 @@ async def test_refused_credentials_start_reauth(hass, fake_client, config_entry)
 async def test_a_401_on_a_later_poll_starts_reauth(hass, fake_client, config_entry):
     await setup_entry(hass, config_entry)
     fake_client.fail = GlkvmAuthError("password changed")
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert _reauth_in_progress(hass)
     assert hass.states.get("switch.kvm_host_power").state == "unavailable"
 
@@ -127,10 +128,10 @@ async def test_losing_the_unit_marks_entities_unavailable_then_recovers(
 ):
     await setup_entry(hass, config_entry)
     fake_client.fail = GlkvmConnectionError("cable out")
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert hass.states.get("binary_sensor.kvm_video_signal").state == "unavailable"
     fake_client.fail = None
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert hass.states.get("binary_sensor.kvm_video_signal").state == "on"
 
 
@@ -145,7 +146,7 @@ async def test_msd_offline_raises_a_repair_issue_and_clears_it(
     assert hass.states.get("switch.kvm_virtual_media_attached").state == "unavailable"
 
     fake_client.msd = MsdState.from_result(result("msd_with_image.json"))
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert registry.async_get_issue(DOMAIN, issue_id) is None
     assert hass.states.get("switch.kvm_virtual_media_attached").state == "off"
 
@@ -158,18 +159,18 @@ async def test_a_stopped_streamer_raises_an_issue_only_after_three_polls(
     issue_id = f"{ISSUE_STREAMER_STOPPED}_{config_entry.entry_id}"
 
     fake_client.streamer = StreamerState.from_result(result("streamer_stopped.json"))
-    await _poll(hass, times=2)
+    await _poll(hass, config_entry, times=2)
     # Two polls: could be GL.iNet's UI in adaptive mode. No issue yet...
     assert registry.async_get_issue(DOMAIN, issue_id) is None
     # ...but the camera and capture sensors already say so.
     assert hass.states.get("camera.kvm_screen").state == "unavailable"
     assert hass.states.get("sensor.kvm_capture_resolution").state == "unavailable"
 
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert registry.async_get_issue(DOMAIN, issue_id) is not None
 
     fake_client.streamer = StreamerState.from_result(result("streamer.json"))
-    await _poll(hass)
+    await _poll(hass, config_entry)
     assert registry.async_get_issue(DOMAIN, issue_id) is None
     assert hass.states.get("sensor.kvm_capture_resolution").state == "2560x1440"
 

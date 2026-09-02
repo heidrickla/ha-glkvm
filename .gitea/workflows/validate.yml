@@ -94,24 +94,37 @@ jobs:
         with:
           python-version: "3.13"
 
+      # Two virtual environments, so the job neither inherits nor leaves
+      # anything in the runner's shared Python toolcache. Another repository's
+      # job had left its packages there, among them an aiodns too old for the
+      # pycares beside it, and `import aiohttp` failed before one test ran.
+      #
+      # pytest-homeassistant-custom-component pins Home Assistant exactly;
+      # 0.13.357 is Home Assistant 2026.8.3, the version this was verified on.
       - name: Install
         run: |
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet \
-            pytest pytest-asyncio "mypy==1.18.2" "PyYAML==6.0.2" Pillow \
-            pytest-homeassistant-custom-component
+          python -m venv .venv-pure
+          .venv-pure/bin/python -m pip install --quiet --upgrade pip
+          .venv-pure/bin/python -m pip install --quiet pytest "aiohttp==3.14.3"
+          python -m venv .venv
+          .venv/bin/python -m pip install --quiet --upgrade pip
+          .venv/bin/python -m pip install --quiet \
+            "mypy==1.18.2" "PyYAML==6.0.2" Pillow \
+            "pytest-homeassistant-custom-component==0.13.357"
 
+      # Only pytest and aiohttp exist in this environment, so a Home Assistant
+      # import creeping into api.py or models.py fails this step by itself.
       - name: Pure tests (client + models, no Home Assistant)
-        run: python -m pytest tests/test_models.py tests/test_api.py -q -p no:homeassistant
+        run: .venv-pure/bin/python -m pytest tests/test_models.py tests/test_api.py -q
 
       - name: Home Assistant layer tests
-        run: python -m pytest tests/ha -q
+        run: .venv/bin/python -m pytest tests/ha -q
 
       - name: mypy strict
-        run: python -m mypy custom_components/glkvm
+        run: .venv/bin/python -m mypy custom_components/glkvm
 
       - name: Offline HACS and hassfest checks
-        run: python tools/validate_local.py
+        run: .venv/bin/python tools/validate_local.py
 
   hacs:
     name: hassfest + HACS
