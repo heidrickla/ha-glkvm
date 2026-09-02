@@ -89,10 +89,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The runner image ships 3.10; Home Assistant needs 3.13.
+      # The runner image ships 3.10. Home Assistant 2026.x needs 3.14: with
+      # 3.13 here, pip silently resolves the newest test package that still
+      # supports 3.13, which is an old Home Assistant, and a pinned current
+      # one cannot be found at all.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       # Two virtual environments, so the job neither inherits nor leaves
       # anything in the runner's shared Python toolcache. Another repository's
