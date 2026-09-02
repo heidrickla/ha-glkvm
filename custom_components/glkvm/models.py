@@ -289,6 +289,12 @@ class HidState:
     The `online` flags are lazy: kvmd only updates them on the next write, so
     a host that has stopped polling the gadget still reads online until
     something is typed.
+
+    Jiggler: `jiggler_enabled` is the unit's configuration (may the jiggler be
+    used at all), `jiggler_active` is whether it is running now. The API's
+    set_params?jiggler= sets the button half of `active`; GL.iNet's schedule
+    can OR it on as well. Measured on the unit 2026-09-02 after a switch that
+    read `enabled` showed on while nothing jiggled.
     """
 
     enabled: bool = False

@@ -107,7 +107,13 @@ class GlkvmVirtualMediaSwitch(GlkvmEntity, SwitchEntity):
 
 
 class GlkvmJigglerSwitch(GlkvmEntity, SwitchEntity):
-    """kvmd's mouse jiggler: nudges the host's pointer so it never sleeps."""
+    """kvmd's mouse jiggler: nudges the host's pointer so it never sleeps.
+
+    On is `jiggler.active`, the running state; `jiggler.enabled` is the
+    unit's configuration and only decides whether the switch is available.
+    The first version read `enabled` and showed on while nothing jiggled -
+    caught by turning it off on the real unit and watching nothing change.
+    """
 
     _attr_translation_key = "mouse_jiggler"
     _attr_device_class = SwitchDeviceClass.SWITCH
@@ -118,11 +124,17 @@ class GlkvmJigglerSwitch(GlkvmEntity, SwitchEntity):
 
     @property
     def available(self) -> bool:
-        return super().available and self.data.hid is not None and self.data.hid.enabled
+        hid = self.data.hid
+        return (
+            super().available
+            and hid is not None
+            and hid.enabled
+            and hid.jiggler_enabled is not False
+        )
 
     @property
     def is_on(self) -> bool | None:
-        return self.data.hid.jiggler_enabled if self.data.hid else None
+        return self.data.hid.jiggler_active if self.data.hid else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.hid_set_jiggler(True))

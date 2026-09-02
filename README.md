@@ -20,7 +20,7 @@ own web interface uses.
 | Virtual media image | select | Which stored image the drive presents. |
 | Media storage free | sensor | Space left on the unit's media partition. |
 | Keyboard connected, Mouse connected | binary sensor | Whether the host is talking to each half of the USB gadget. |
-| Mouse jiggler | switch | kvmd's jiggler, which keeps the host awake. |
+| Mouse jiggler | switch | kvmd's jiggler, which keeps the host awake. On means it is running; unavailable when the unit's configuration disables it. |
 | Mouse mode | select | Absolute, relative, hybrid or touch. |
 | Reset keyboard and mouse | button | Re-plugs the USB gadget. |
 | Wake *name* | button | One per Wake-on-LAN target stored on the unit. |

@@ -1,5 +1,7 @@
 """The entities and actions: what they read, and what they send."""
 
+from dataclasses import replace
+
 import pytest
 from homeassistant.components.camera import async_get_image
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -50,7 +52,9 @@ async def test_states_read_from_the_recorded_unit(hass, fake_client, config_entr
     assert hass.states.get("sensor.kvm_capture_frame_rate").state == "60"
     assert hass.states.get("sensor.kvm_cpu_temperature").state == "47.03"
     assert hass.states.get("switch.kvm_virtual_media_attached").state == "off"
-    assert hass.states.get("switch.kvm_mouse_jiggler").state == "on"
+    # jiggler.enabled is true in the recording (the unit allows it) while
+    # jiggler.active is false (it is not running): the switch reads `active`.
+    assert hass.states.get("switch.kvm_mouse_jiggler").state == "off"
     assert hass.states.get("switch.kvm_relay").state == "off"
     select = hass.states.get("select.kvm_virtual_media_image")
     assert select.state == "ubuntu.iso"
@@ -167,16 +171,30 @@ async def test_changing_the_image_while_attached_is_refused(
 
 async def test_jiggler_and_mouse_mode(hass, fake_client, config_entry):
     await setup_entry(hass, config_entry)
-    await _call(hass, "switch", "turn_off", "switch.kvm_mouse_jiggler")
+    await _call(hass, "switch", "turn_on", "switch.kvm_mouse_jiggler")
     await _call(
         hass, "select", "select_option", "select.kvm_mouse_mode", option="usb_rel"
     )
     await _call(hass, "button", "press", "button.kvm_reset_keyboard_and_mouse")
     assert fake_client.calls == [
-        ("hid_set_jiggler", (False,), {}),
+        ("hid_set_jiggler", (True,), {}),
         ("hid_set_mouse_output", ("usb_rel",), {}),
         ("hid_reset", (), {}),
     ]
+
+
+async def test_jiggler_follows_the_running_state_and_the_units_config(
+    hass, fake_client, config_entry
+):
+    fake_client.hid = replace(fake_client.hid, jiggler_active=True)
+    await setup_entry(hass, config_entry)
+    assert hass.states.get("switch.kvm_mouse_jiggler").state == "on"
+    # The unit's configuration forbids the jiggler: nothing to switch.
+    fake_client.hid = replace(
+        fake_client.hid, jiggler_enabled=False, jiggler_active=False
+    )
+    await _poll(hass, config_entry)
+    assert hass.states.get("switch.kvm_mouse_jiggler").state == "unavailable"
 
 
 async def test_gpio_switch_and_pulse(hass, fake_client, config_entry):
