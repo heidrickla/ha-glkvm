@@ -9,6 +9,7 @@ the unit's LAN, and the full set of ATX power actions.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
@@ -37,27 +38,24 @@ from .entity import raise_from_error
 
 _MAC = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 
-_ENTRY = {vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string}
 
-TYPE_TEXT_SCHEMA = vol.Schema(
+def _schema(fields: dict[vol.Marker, Any]) -> vol.Schema:
+    """A service schema: the config entry the call names, plus its own fields."""
+    return vol.Schema({vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string, **fields})
+
+
+TYPE_TEXT_SCHEMA = _schema(
     {
-        **_ENTRY,
         vol.Required(ATTR_TEXT): cv.string,
         vol.Optional(ATTR_SLOW, default=False): cv.boolean,
     }
 )
-SEND_KEYS_SCHEMA = vol.Schema(
-    {
-        **_ENTRY,
-        vol.Required(ATTR_KEYS): vol.All(
-            cv.ensure_list, [cv.string], vol.Length(min=1)
-        ),
-    }
+SEND_KEYS_SCHEMA = _schema(
+    {vol.Required(ATTR_KEYS): vol.All(cv.ensure_list, [cv.string], vol.Length(min=1))}
 )
-WAKE_SCHEMA = vol.Schema({**_ENTRY, vol.Required(ATTR_MAC): cv.string})
-POWER_SCHEMA = vol.Schema(
+WAKE_SCHEMA = _schema({vol.Required(ATTR_MAC): cv.string})
+POWER_SCHEMA = _schema(
     {
-        **_ENTRY,
         vol.Required(ATTR_ACTION): vol.In(POWER_ACTIONS),
         vol.Optional(ATTR_WAIT, default=True): cv.boolean,
     }
