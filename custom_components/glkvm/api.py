@@ -215,7 +215,13 @@ class GlkvmClient:
         await self._get("/api/auth/check")
 
     async def get_system(self) -> SystemInfo:
-        """Serial, versions and hostname. `fields` keeps it cheap."""
+        """Serial, versions and hostname.
+
+        Every /api/info request here names its fields, and none names
+        `extras`: on GL.iNet's Buildroot firmware the extras submanager asks a
+        systemd D-Bus that does not exist and logs an error on the unit for
+        every call, while still answering 200. A bare /api/info includes it.
+        """
         result = await self._get("/api/info", fields="system,meta")
         return SystemInfo.from_info(self._mapping(result))
 

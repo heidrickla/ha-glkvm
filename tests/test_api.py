@@ -265,3 +265,37 @@ def test_gpio_and_wol_commands():
     assert session.calls[0]["params"] == {"channel": "relay", "state": "1", "wait": "1"}
     assert session.calls[1]["params"] == {"channel": "demo_button", "wait": "1"}
     assert session.calls[2]["params"] == {"mac": "02:00:00:00:00:01"}
+
+
+def test_no_read_asks_for_the_extras_section():
+    """Every /api/info read names its fields, and never `extras`.
+
+    On GL.iNet's firmware the extras submanager asks a systemd D-Bus that
+    does not exist and logs an error on the unit for every call while still
+    answering 200; a bare /api/info includes it. Measured in kvmd.log by the
+    firmware session, 2026-09-02.
+    """
+    ok = _json({"ok": True, "result": {}})
+    session = _Session([ok] * 11 + [_Resp(200, b"\xff\xd8\xff", "image/jpeg")])
+    client = _client(session)
+    for read in (
+        client.check_auth,
+        client.get_system,
+        client.get_firmware,
+        client.get_hostname,
+        client.get_health,
+        client.get_atx,
+        client.get_msd,
+        client.get_streamer,
+        client.get_hid,
+        client.get_gpio,
+        client.get_wol_targets,
+        client.get_snapshot,
+    ):
+        _run(read())
+    info_calls = [c for c in session.calls if c["url"].endswith("/api/info")]
+    assert info_calls, "the identity and health reads go through /api/info"
+    for call in info_calls:
+        fields = (call["params"] or {}).get("fields", "")
+        assert fields, f"bare /api/info requested: {call['url']}"
+        assert "extras" not in fields.split(",")
