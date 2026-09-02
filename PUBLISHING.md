@@ -36,8 +36,14 @@ Rules marked `todo`, and what clears each:
 
 | Rule | Clears when |
 |---|---|
-| `config-flow-test-coverage`, `test-coverage`, `strict-typing` | The `Home Assistant layer` CI job has run the suites and mypy strict green with Home Assistant installed. Written tests that have never run are not coverage; mypy without HA installed sees every HA class as `Any`. |
 | `discovery`, `discovery-update-info` | The unit's mDNS service type and TXT records have been measured from a LAN host and a zeroconf flow keyed on the serial is implemented. Not guessed. |
+
+`config-flow-test-coverage`, `test-coverage` and `strict-typing` were `todo`
+until the `Home Assistant layer` job had run the suites and mypy strict green
+with Home Assistant 2026.8.3 installed (2026-09-02). Written tests that have
+never run are not coverage, and mypy without HA installed sees every HA class
+as `Any` - that first real run found two typing gaps and one redaction gap a
+local pass had not.
 
 `quality_scale` is deliberately absent from `manifest.json`. The badge is
 core-only; the validator refuses a manifest that claims a tier.

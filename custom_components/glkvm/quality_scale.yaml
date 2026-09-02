@@ -21,12 +21,13 @@ rules:
       home-assistant/brands instead.
   common-modules: done
   config-flow-test-coverage:
-    status: todo
+    status: done
     comment: |
       tests/ha/test_config_flow.py covers the user step, the three error
-      mappings, the duplicate abort, reconfigure with its another_device
-      guard, and reauth. Marked done once the `Home Assistant layer` job of
-      .gitea/workflows/validate.yml has executed it green.
+      mappings, the duplicate abort (which follows a moved unit), reconfigure
+      with its another_device guard, and reauth in both outcomes. Run green
+      by the `Home Assistant layer` job of .gitea/workflows/validate.yml
+      against Home Assistant 2026.8.3 on 2026-09-02.
   config-flow: done
   dependency-transparency:
     status: exempt
@@ -96,12 +97,14 @@ rules:
       A 401 on any poll raises ConfigEntryAuthFailed and stops polling, which
       also keeps the integration out of GL.iNet's failed-login lockout.
   test-coverage:
-    status: todo
+    status: done
     comment: |
-      The client and models have pure tests against bodies recorded from a
-      GL-RM10 on firmware 1.10.0; the Home Assistant layer covers setup,
-      entities, commands, actions and repair issues. Marked done once the
-      `Home Assistant layer` job has executed both suites green.
+      46 pure tests exercise the client and models against bodies recorded
+      from a GL-RM10 on firmware 1.10.0, in a venv holding only pytest and
+      aiohttp; 48 Home Assistant layer tests cover setup, unload, both
+      failure modes, every entity's state and command, the four actions,
+      the two repair issues and diagnostics redaction. Both suites run green
+      in the `Home Assistant layer` job against Home Assistant 2026.8.3.
 
   # Gold
   devices: done
@@ -169,9 +172,11 @@ rules:
       with the entry's verify_ssl. Authentication is per-request headers, so
       there is no cookie jar that would need isolating.
   strict-typing:
-    status: todo
+    status: done
     comment: |
-      mypy --strict is configured in pyproject.toml and passes locally, but
-      without Home Assistant installed every HA class is Any and the check
-      is weaker than it looks. Marked done once the CI job with Home
-      Assistant installed has run it green.
+      mypy --strict passes in the `Home Assistant layer` job with Home
+      Assistant 2026.8.3 installed, which is the run that means something:
+      locally, without Home Assistant, every HA class is Any and the check
+      is weaker than it looks. That run found and fixed two real gaps a
+      local pass had not (a re-exported DOMAIN import, an uninferable schema
+      key type).
