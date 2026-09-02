@@ -75,6 +75,8 @@ async def test_the_same_unit_at_a_new_address_updates_the_existing_entry(
     assert result["reason"] == "already_configured"
     # Same serial, so the entry followed the unit rather than duplicating it.
     assert config_entry.data[CONF_HOST] == "192.0.2.16"
+    # The update schedules a reload; let it finish inside the test.
+    await hass.async_block_till_done()
 
 
 async def test_reconfigure_updates_the_credentials(hass, fake_client, config_entry):
@@ -87,6 +89,9 @@ async def test_reconfigure_updates_the_credentials(hass, fake_client, config_ent
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert config_entry.data[CONF_PASSWORD] == "newer"
+    # Reconfigure schedules a reload; a reload still running when the test
+    # ends leaves the camera component's token timer behind at teardown.
+    await hass.async_block_till_done()
 
 
 async def test_reconfigure_refuses_a_different_unit(hass, fake_client, config_entry):
@@ -113,6 +118,8 @@ async def test_reauth_replaces_only_the_credentials(hass, fake_client, config_en
     assert done["reason"] == "reauth_successful"
     assert config_entry.data[CONF_PASSWORD] == "reauthed"
     assert config_entry.data[CONF_HOST] == HOST
+    # Reauth schedules a reload; see test_reconfigure_updates_the_credentials.
+    await hass.async_block_till_done()
 
 
 async def test_reauth_with_a_still_wrong_password_stays_on_the_form(
