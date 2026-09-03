@@ -55,6 +55,26 @@ a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the
 ATX board's power reading, the firmware version and hostname endpoints, the
 Wake-on-LAN list), and degrades where they are absent rather than guessing.
 
+### Stock firmware or the glkvm-firmware image?
+
+**No custom firmware is needed.** Every call this integration makes goes to
+stock kvmd and GL.iNet endpoints over `https://<unit>`, and none of the
+modules patched by the [glkvm-firmware](../glkvm-firmware) project is on any
+path it uses (no Redfish, no OCR, no VNC, no port 8888, no Prometheus
+export). The unit it was verified against runs that project's provisioned
+1.10.0 image, and only two of its settings change what you see here — both
+are lines in `/etc/kvmd/override.yaml`, not the image:
+
+| Setting | On stock firmware | With the setting |
+|---|---|---|
+| `kvmd.streamer.forever: true` | the Screen camera has a picture only while GL.iNet's web UI is open, otherwise "no image" | a picture at every refresh |
+| `otg.devices.msd.start_cdrom` / `start_flash: true` | virtual media reports offline on 1.10.0 | virtual media online at boot; GL.iNet's own USB-functions toggle in their web UI sets the same thing without a shell |
+
+Everything else — power state and buttons on the ATX board, keyboard and
+mouse, Wake-on-LAN, HDMI signal, host information — behaves identically on
+stock. A stock unit needs its login entered; a unit with authentication
+disabled accepts anything.
+
 ## Requirements
 
 - Home Assistant 2025.4 or newer.
@@ -202,10 +222,12 @@ script:
   keeps it running; a repair issue says so when the streamer has been stopped
   for three polls.
 - **Virtual media is offline on a stock 1.10.0 unit.** That firmware ships the
-  mass-storage functions unlinked from the USB gadget. Setting
+  mass-storage functions unlinked from the USB gadget. Enabling USB functions
+  in GL.iNet's own web UI fixes it without a shell (it writes the same keys to
+  the unit's `boot.yaml`); so does setting
   `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` in
-  `override.yaml` and rebooting fixes it; a repair issue says so. Images
-  smaller than 614,400 bytes are rejected by the unit's kernel.
+  `override.yaml` and rebooting. A repair issue says so. Images smaller than
+  614,400 bytes are rejected by the unit's kernel.
 - **Power control needs GL.iNet's ATX board.** Without it the power switch and
   the three buttons are unavailable, and the `power` action refuses.
 - **Keyboard connected and Mouse connected are lazy.** kvmd updates them on
