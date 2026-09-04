@@ -32,15 +32,42 @@ count are there too, disabled by default.
 
 ### Actions
 
-All actions take the KVM to talk to (`config_entry_id`), because you may have
-more than one.
+Every action takes the KVM to talk to as `config_entry_id`, because you may
+have more than one. In the UI it is a picker; in YAML it is the entry id,
+which the picker fills in for you when you switch the editor to YAML mode.
+An action called while that KVM is unloaded is refused in words rather than
+failing silently.
 
-| Action | Does |
-|---|---|
-| `glkvm.type_text` | Types text into the host over the USB keyboard. `slow: true` for hosts that drop fast input. |
-| `glkvm.send_keys` | Presses a combination together and releases it, e.g. `["ControlLeft", "AltLeft", "Delete"]`. Key names are the ones kvmd uses: `KeyA`, `Digit1`, `Enter`, `Escape`, `MetaLeft`, `F5`. |
-| `glkvm.wake` | Sends a Wake-on-LAN packet from the KVM to a MAC address on its network. |
-| `glkvm.power` | The full set of ATX actions: `on`, `off` (ACPI), `off_hard`, `reset_hard`, with `wait`. |
+`glkvm.type_text` types text into the host over the USB keyboard.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `config_entry_id` | yes | The KVM whose host to type into. |
+| `text` | yes | What to type. Newlines are sent as Enter. |
+| `slow` | no, default `false` | Add a delay between keys, for hosts that drop fast input. |
+
+`glkvm.send_keys` presses a combination together on the host, then releases it.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `config_entry_id` | yes | The KVM whose host to send the keys to. |
+| `keys` | yes | A list of key names as kvmd uses them: `ControlLeft`, `AltLeft`, `Delete`, `MetaLeft`, `KeyA`, `Digit1`, `Enter`, `Escape`, `F5`. At least one non-blank name. |
+
+`glkvm.wake` sends a Wake-on-LAN packet from the KVM to a machine on its network.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `config_entry_id` | yes | The KVM to send the packet from. |
+| `mac` | yes | The target's MAC address, `aa:bb:cc:dd:ee:ff` or `aa-bb-cc-dd-ee-ff`. Anything else is refused before the unit is asked. |
+
+`glkvm.power` is the full set of ATX power actions. It refuses when the unit
+has no ATX board.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `config_entry_id` | yes | The KVM whose host to control. |
+| `action` | yes | `on`, `off` (asks the OS to shut down), `off_hard` (cuts power), `reset_hard`. |
+| `wait` | no, default `true` | Wait for the KVM to finish the action before returning. |
 
 ## Supported devices
 
@@ -77,7 +104,9 @@ disabled accepts anything.
 
 ## Requirements
 
-- Home Assistant 2025.4 or newer.
+- Home Assistant 2026.3 or newer. That is the release that reads a custom
+  integration's brand images from its own folder; the code itself uses
+  nothing newer than 2025.4.
 - A GL.iNet KVM reachable from Home Assistant on your LAN, by IP address.
 - Its login, unless you have disabled authentication on the unit.
 
@@ -102,8 +131,10 @@ Then Settings -> Devices & Services -> Add Integration -> GL.iNet KVM.
 
 Setup checks the credentials against the unit and reads its serial number
 before the entry is created, so a wrong password or a wrong address is caught
-on the form. The serial is the entry's unique id: a unit that moves to a new
-address is recognised, not added twice.
+on the form. The serial is the entry's unique id: adding a unit that is
+already configured updates its existing entry with the address, port and
+credentials you just entered instead of creating a second one. When the form
+comes back with an error, everything you typed is kept except the password.
 
 ### Reconfiguring
 
@@ -128,6 +159,13 @@ HID, GPIO, health and Wake-on-LAN state, each from its own endpoint. A single
 endpoint failing keeps that section's last value and leaves the rest live;
 only the unit being unreachable marks everything unavailable. The camera
 fetches a frame when something asks for one.
+
+Two sets of entities follow the unit between polls. Wake buttons are created
+for targets added on the unit and removed from the entity registry for
+targets deleted there, including deletions made while Home Assistant was not
+running. The health sensors are created the first time the unit's health
+section answers, so a read that failed at startup does not hide them until
+the next reload.
 
 Thirty seconds is deliberate. Host power, video signal and attached media
 change at human speed, and the unit's CPU belongs to its video encoder. The
@@ -194,21 +232,31 @@ script:
           entity_id: button.rack_kvm_reset
 ```
 
-Log in to a console that has no network yet:
+Log in to a console that has no network yet. This one is a script blueprint,
+so the KVM is picked when the script is created from it; `!input` only
+resolves inside a blueprint.
 
 ```yaml
-script:
-  console_login:
-    sequence:
-      - action: glkvm.type_text
-        data:
-          config_entry_id: !input kvm
-          text: "root\n"
-      - delay: "00:00:02"
-      - action: glkvm.send_keys
-        data:
-          config_entry_id: !input kvm
-          keys: ["ControlLeft", "KeyL"]
+blueprint:
+  name: Console login
+  description: Type a login at a host's console and clear the screen.
+  domain: script
+  input:
+    kvm:
+      name: KVM
+      selector:
+        config_entry:
+          integration: glkvm
+sequence:
+  - action: glkvm.type_text
+    data:
+      config_entry_id: !input kvm
+      text: "root\n"
+  - delay: "00:00:02"
+  - action: glkvm.send_keys
+    data:
+      config_entry_id: !input kvm
+      keys: ["ControlLeft", "KeyL"]
 ```
 
 ## Known limitations
@@ -250,7 +298,9 @@ script:
 | Camera and capture sensors unavailable, the rest fine | The streamer is not running on the unit. See known limitations. |
 | Virtual media entities unavailable, the rest fine | The mass-storage gadget is offline. See known limitations. |
 | Power entities unavailable, the rest fine | No ATX board is attached to the unit. |
+| No CPU temperature, CPU usage or Memory usage sensors | The firmware has no health section (1.8.1), or the unit has not answered a health read yet. They appear on the first poll that has one. |
 | A Wake button vanished | The target was removed from the unit's Wake-on-LAN list. |
+| An action fails with "is not loaded" | The KVM's entry is unloaded or still retrying setup. Check its card under Devices & Services. |
 | Typed text arrives garbled or not at all | Try `slow: true`, and check Keyboard connected. `kvmd-otgconf --reset-gadget` on the unit re-plugs a gadget the host has stopped polling. |
 
 ```yaml
@@ -270,11 +320,15 @@ credentials and every MAC and IP address redacted.
   bodies a real GL-RM10 sent, with its serial, hostname and the household's
   MAC and IP addresses replaced.
 - `tests/ha/` covers the Home Assistant layer with the client replaced by a
-  fake that answers from the same fixtures. It runs in CI on Linux; it skips
-  where the Home Assistant test harness is absent.
+  fake that answers from the same fixtures. The GitHub `Tests` workflow runs
+  it on every push against a pinned Home Assistant release, with coverage
+  reported and mypy in strict mode; it skips where the Home Assistant test
+  harness is absent, which includes Windows.
 - `python tools/validate_local.py` is the offline half of the hassfest and
-  HACS checks plus every cross-file consistency check.
-- `python tools/make_brand.py` regenerates and size-checks the brand images.
+  HACS checks plus every cross-file consistency check, including a scan for
+  user-facing exceptions raised without a translation key.
+- `python tools/make_brand.py` regenerates the brand images and checks their
+  sizes, transparency and fill.
 
 ```bash
 python -m pytest tests/ -q
@@ -290,10 +344,11 @@ two stock-firmware limitations above, lives in the `glkvm-firmware` repository.
 
 Built to Home Assistant's Integration Quality Scale, tracked rule by rule in
 [`quality_scale.yaml`](custom_components/glkvm/quality_scale.yaml) with a
-reason on every exemption. `tools/validate_local.py` checks the file against
-the pinned rule list, so a rule that is simply missing fails rather than
-reading as complete. The scale is a core-integration concept; a custom
-integration builds to the rules and is not scored.
+reason on every exemption and on every rule still marked `todo`.
+`tools/validate_local.py` checks the file against the pinned rule list, so a
+rule that is simply missing fails rather than reading as complete. The scale
+is a core-integration concept; a custom integration builds to the rules and
+is not scored.
 
 Publication status is in [PUBLISHING.md](PUBLISHING.md).
 

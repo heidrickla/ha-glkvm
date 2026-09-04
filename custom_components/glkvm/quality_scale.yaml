@@ -15,26 +15,33 @@ rules:
   brands:
     status: done
     comment: |
-      Brand images ship in-repo at custom_components/glkvm/brand/ (generated
-      and size-checked by tools/make_brand.py), which HACS reads first since
-      Home Assistant 2026.3. A core submission would add them to
+      Brand images ship in-repo at custom_components/glkvm/brand/, generated
+      by tools/make_brand.py, which checks the sizes, a transparent
+      background and that the mark fills the image. Home Assistant serves a
+      custom integration's own brand folder from 2026.3, which is why
+      hacs.json's minimum is 2026.3.0. A core submission would add them to
       home-assistant/brands instead.
   common-modules: done
   config-flow-test-coverage:
     status: done
     comment: |
       tests/ha/test_config_flow.py covers the user step, the three error
-      mappings, the duplicate abort (which follows a moved unit), reconfigure
-      with its another_device guard, and reauth in both outcomes. Run green
-      by the `Home Assistant layer` job of .gitea/workflows/validate.yml
-      against Home Assistant 2026.8.3 on 2026-09-02.
+      mappings each followed by a retry that reaches CREATE_ENTRY, the
+      duplicate abort (which refreshes the moved unit's address, port and
+      credentials), the no-serial fallback, reconfigure with its
+      another_device guard and its error-then-recovery path, and reauth in
+      both outcomes including recovery from a wrong password. Every form
+      that can show an error is checked not to echo the password. Run by
+      the GitHub Tests workflow on every push.
   config-flow: done
   dependency-transparency:
     status: exempt
     comment: |
       No external dependency. requirements is empty; the client is aiohttp
       (already in Home Assistant) plus the standard library.
-  docs-actions: done
+  docs-actions:
+    status: done
+    comment: README lists every action with every field, whether it is required, and its default.
   docs-conditions:
     status: exempt
     comment: This integration provides no conditions.
@@ -48,8 +55,8 @@ rules:
     status: done
     comment: |
       Entities are coordinator-driven; CoordinatorEntity subscribes in
-      async_added_to_hass and unsubscribes on removal. The Wake-on-LAN
-      listener is registered through entry.async_on_unload.
+      async_added_to_hass and unsubscribes on removal. The Wake-on-LAN and
+      health-sensor listeners are registered through entry.async_on_unload.
   entity-unique-id: done
   has-entity-name: done
   runtime-data: done
@@ -64,13 +71,23 @@ rules:
     comment: |
       async_config_entry_first_refresh raises ConfigEntryNotReady while the
       unit is unreachable and ConfigEntryAuthFailed when it refuses the
-      credentials.
+      credentials, both with translated messages.
   unique-config-entry:
     status: done
-    comment: The unit's serial number is the unique id, so a moved unit is not added twice.
+    comment: |
+      The unit's serial number is the unique id, so a moved unit is not added
+      twice; re-adding it updates the stored address, port and credentials.
+      A unit that reports no serial falls back to its address, which still
+      keeps one entry per unit. Both paths are tested.
 
   # Silver
-  action-exceptions: done
+  action-exceptions:
+    status: done
+    comment: |
+      Refusals caused by the request (no image selected, image change while
+      attached, blank key list, malformed MAC, no ATX board, unknown or
+      unloaded entry) raise ServiceValidationError; a command the unit
+      refuses or fails raises HomeAssistantError, translated.
   config-entry-unloading: done
   docs-configuration-parameters:
     status: exempt
@@ -80,31 +97,38 @@ rules:
       reconfigure flow, and documented as installation parameters.
   docs-installation-parameters: done
   entity-unavailable:
-    status: done
+    status: todo
     comment: |
-      Coordinator failure marks everything unavailable. Beyond that, ATX
-      entities are unavailable without an ATX board, media entities while
-      the gadget is offline, and the camera and capture sensors while the
-      streamer is stopped - each a real state the unit reports.
+      Coordinator failure marks everything unavailable, and ATX, media and
+      capture entities are unavailable in the states the unit reports. Not
+      yet: a partial poll (one to six of the seven endpoints failing, or a
+      500 on one) keeps that section's last value, so its entities show
+      stale state rather than unavailable. Track per-section failure and
+      fold it into available_fn.
   integration-owner: done
   log-when-unavailable:
     status: done
-    comment: The coordinator logs an unreachable unit once, via UpdateFailed.
+    comment: |
+      DataUpdateCoordinator logs an unreachable unit once when the poll first
+      fails and once at info when it recovers.
   parallel-updates: done
   reauthentication-flow:
-    status: done
+    status: todo
     comment: |
-      A 401 on any poll raises ConfigEntryAuthFailed and stops polling, which
-      also keeps the integration out of GL.iNet's failed-login lockout.
+      A 401 on any poll raises ConfigEntryAuthFailed and starts reauth, which
+      stops polling and keeps the integration out of GL.iNet's failed-login
+      lockout. Not yet: the reauth step does not set the unique id and abort
+      on a mismatch, so a different unit answering at the stored address
+      would be accepted. Add async_set_unique_id plus
+      _abort_if_unique_id_mismatch to async_step_reauth_confirm.
   test-coverage:
-    status: done
+    status: todo
     comment: |
-      46 pure tests exercise the client and models against bodies recorded
-      from a GL-RM10 on firmware 1.10.0, in a venv holding only pytest and
-      aiohttp; 48 Home Assistant layer tests cover setup, unload, both
-      failure modes, every entity's state and command, the four actions,
-      the two repair issues and diagnostics redaction. Both suites run green
-      in the `Home Assistant layer` job against Home Assistant 2026.8.3.
+      The GitHub Tests workflow runs the pure suite and tests/ha with
+      --cov=custom_components/glkvm on every push and reports per-module
+      coverage. It is not yet gated at 95%: the partial-poll branches in
+      coordinator.py and a few availability branches are known to be
+      uncovered. Add tests for those, then --cov-fail-under=95.
 
   # Gold
   devices: done
@@ -121,28 +145,42 @@ rules:
     status: todo
     comment: Follows discovery.
   docs-data-update: done
-  docs-examples: done
+  docs-examples:
+    status: done
+    comment: |
+      Four examples in the README; the one using `!input` is written as a
+      script blueprint, the only place that tag resolves.
   docs-known-limitations: done
   docs-supported-devices: done
-  docs-supported-functions: done
+  docs-supported-functions:
+    status: done
+    comment: |
+      The README's entity table and its disabled-by-default list match the
+      code; tests/ha/test_entities.py checks the disabled set.
   docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices:
     status: exempt
     comment: |
       One entry is one KVM. The things that come and go - Wake-on-LAN
-      targets, GPIO channels - are entities on that device, and the WOL set
-      is kept in step with the unit by a coordinator listener.
+      targets, GPIO channels, the health section - are entities on that
+      device, and the WOL and health sets are kept in step with the unit by
+      coordinator listeners.
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default:
     status: done
     comment: |
-      Memory available, both network rates and the H.264 bitrate are
-      disabled by default: useful when chasing a problem on the unit, noise
-      on a dashboard otherwise.
+      Stream client count, H.264 bitrate, memory available and both network
+      rates are disabled by default: useful when chasing a problem on the
+      unit, noise on a dashboard otherwise.
   entity-translations: done
-  exception-translations: done
+  exception-translations:
+    status: done
+    comment: |
+      Every HomeAssistantError, ServiceValidationError, ConfigEntryAuthFailed
+      and UpdateFailed carries a translation key; tools/validate_local.py
+      fails on one that does not, in any module.
   icon-translations: done
   reconfiguration-flow: done
   repair-issues:
@@ -156,7 +194,9 @@ rules:
     comment: |
       A single device removed with the entry. Entities for Wake-on-LAN
       targets removed on the unit are taken out of the entity registry on
-      the next poll.
+      the next poll, and at setup for targets removed while the entry was
+      unloaded, since the registry rather than the platform's memory is
+      what is compared.
 
   # Platinum
   async-dependency:
@@ -172,11 +212,12 @@ rules:
       with the entry's verify_ssl. Authentication is per-request headers, so
       there is no cookie jar that would need isolating.
   strict-typing:
-    status: done
+    status: todo
     comment: |
-      mypy --strict passes in the `Home Assistant layer` job with Home
-      Assistant 2026.8.3 installed, which is the run that means something:
-      locally, without Home Assistant, every HA class is Any and the check
-      is weaker than it looks. That run found and fixed two real gaps a
-      local pass had not (a re-exported DOMAIN import, an uninferable schema
-      key type).
+      pyproject.toml runs mypy with strict = true and no relaxations; the
+      three that used to be off (disallow_subclassing_any,
+      disallow_untyped_decorators, warn_unused_ignores) are gone, and the
+      type-ignore they hid is removed. Done once the GitHub Tests job's mypy
+      run with Home Assistant installed is green on this configuration; a
+      local run without Home Assistant sees every HA class as Any and is not
+      the check.

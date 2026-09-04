@@ -30,12 +30,15 @@ After opening, leave it alone: the queue is oldest-first and comments delay it.
 ## The Home Assistant layer tests run on Linux, not here
 
 `tests/ha/` covers setup and unload, the config, reconfigure and reauth flows
-and their refusals, every entity's state against recorded bodies, every
-command and action against a recorded client, the two repair issues, and
-diagnostics redaction. They run in CI on the self-hosted Gitea runner under
-the `Home Assistant layer` job (`workflow_dispatch`, because the runner is
-shared and installing Home Assistant is slow). They do not run on Windows: the
-harness blocks sockets and the ProactorEventLoop needs a local socket pair.
+with their refusals and their recovery from each, every entity's state
+against recorded bodies, every command and action against a recorded client,
+the two repair issues, and diagnostics redaction. The GitHub `Tests` workflow
+(`.github/workflows/tests.yml`) runs them on every push against the pinned
+Home Assistant release, reports coverage, and runs mypy in strict mode with
+Home Assistant installed. The forge's `Home Assistant layer` job
+(`.gitea/workflows/validate.yml`) runs the same suite on `workflow_dispatch`
+only, because that runner is shared. They do not run on Windows: the harness
+blocks sockets and the ProactorEventLoop needs a local socket pair.
 
 They skip when the harness is absent, so a bare checkout runs only the pure
 suite and does not imply coverage it does not have.
@@ -50,14 +53,16 @@ Rules marked `todo`, and what clears each:
 
 | Rule | Clears when |
 |---|---|
+| `test-coverage` | The `Tests` job reports 95% or more for every module and `--cov-fail-under=95` is added so it stays there. Coverage is reported today, not gated. |
+| `entity-unavailable` | Entities whose section failed to read in a partial poll (one to six of the seven endpoints) become unavailable rather than keeping their last value. |
+| `reauthentication-flow` | The reauth step sets the unique id and aborts on a mismatch, so a swapped unit at the same address is refused. |
+| `strict-typing` | The `Tests` job's mypy run, with Home Assistant installed and no relaxations in pyproject, is green. |
 | `discovery`, `discovery-update-info` | The unit's mDNS service type and TXT records have been measured from a LAN host and a zeroconf flow keyed on the serial is implemented. Not guessed. |
 
-`config-flow-test-coverage`, `test-coverage` and `strict-typing` were `todo`
-until the `Home Assistant layer` job had run the suites and mypy strict green
-with Home Assistant 2026.8.3 installed (2026-09-02). Written tests that have
-never run are not coverage, and mypy without HA installed sees every HA class
-as `Any` - that first real run found two typing gaps and one redaction gap a
-local pass had not.
+A rule is `done` when a test or a CI run shows it, not when the code looks
+right. Written tests that have never run are not coverage, and mypy without
+Home Assistant installed sees every HA class as `Any`; the first real run of
+each found gaps a local pass had not.
 
 `quality_scale` is deliberately absent from `manifest.json`. The badge is
 core-only; the validator refuses a manifest that claims a tier.
