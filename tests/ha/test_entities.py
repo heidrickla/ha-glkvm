@@ -135,7 +135,8 @@ async def test_attaching_with_no_image_selected_is_refused_in_words(
 ):
     fake_client.msd = MsdState.from_result(result("msd.json"))
     await setup_entry(hass, config_entry)
-    with pytest.raises(HomeAssistantError):
+    # The request is what is wrong, so it is a validation error.
+    with pytest.raises(ServiceValidationError):
         await _call(hass, "switch", "turn_on", "switch.kvm_virtual_media_attached")
     assert fake_client.calls == []
 
@@ -158,7 +159,7 @@ async def test_changing_the_image_while_attached_is_refused(
     fake_client.msd = MsdState.from_result(result("msd_connected.json"))
     await setup_entry(hass, config_entry)
     assert hass.states.get("switch.kvm_virtual_media_attached").state == "on"
-    with pytest.raises(HomeAssistantError):
+    with pytest.raises(ServiceValidationError):
         await _call(
             hass,
             "select",

@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
@@ -96,8 +96,9 @@ class GlkvmVirtualMediaSwitch(GlkvmEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.data.msd is None or self.data.msd.image is None:
-            # kvmd would answer with an opaque error; say what is missing.
-            raise HomeAssistantError(
+            # kvmd would answer with an opaque error; say what is missing. The
+            # user's request is what is wrong, so it is a validation error.
+            raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="no_image_selected"
             )
         await self._run(self.coordinator.client.msd_set_connected(True))

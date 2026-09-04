@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN
@@ -57,8 +57,10 @@ class GlkvmImageSelect(GlkvmEntity, SelectEntity):
         return self.data.msd.image if self.data.msd else None
 
     async def async_select_option(self, option: str) -> None:
+        # The user asked for something the unit's state forbids: a validation
+        # error, not a failure of the unit.
         if self.data.msd is not None and self.data.msd.connected:
-            raise HomeAssistantError(
+            raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="media_connected"
             )
         await self._run(self.coordinator.client.msd_select_image(option))
