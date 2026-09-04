@@ -74,11 +74,14 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
         value_fn=lambda d: d.streamer.captured_fps if d.streamer else None,
         available_fn=_streamer_running,
     ),
+    # Disabled by default: it counts viewers of GL.iNet's own web UI, which is
+    # a debugging aid rather than a state of the host.
     GlkvmSensorDescription(
         key="stream_clients",
         translation_key="stream_clients",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=lambda d: d.streamer.clients if d.streamer else None,
         available_fn=_streamer_running,
     ),

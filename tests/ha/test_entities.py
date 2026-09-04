@@ -87,12 +87,16 @@ async def test_without_an_atx_board_the_power_entities_are_unavailable(
     assert hass.states.get("binary_sensor.kvm_video_signal").state == "on"
 
 
+@pytest.mark.parametrize(
+    "key",
+    ["stream_clients", "h264_bitrate", "memory_available", "network_rx_rate"],
+)
 async def test_disabled_by_default_sensors_are_not_added(
-    hass, fake_client, config_entry
+    hass, fake_client, config_entry, key
 ):
     await setup_entry(hass, config_entry)
     registry = er.async_get(hass)
-    entry = registry.async_get_entity_id("sensor", DOMAIN, f"{SERIAL}_network_rx_rate")
+    entry = registry.async_get_entity_id("sensor", DOMAIN, f"{SERIAL}_{key}")
     assert entry is not None
     assert registry.async_get(entry).disabled_by is er.RegistryEntryDisabler.INTEGRATION
     assert hass.states.get(entry) is None
