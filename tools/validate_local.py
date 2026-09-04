@@ -1,10 +1,11 @@
 """Local stand-in for the checks CI would run.
 
-hassfest and the HACS action run on the self-hosted Gitea runner; this
-approximates the parts of them that can be checked with no network at all,
-plus the cross-file consistency that nothing else checks: translation keys
-against icons, exceptions raised against exceptions declared, actions
-registered against actions described, the quality scale against the pinned
+hassfest and the HACS action run on GitHub; this approximates the parts of
+them that can be checked with no network at all, plus the cross-file
+consistency that nothing else checks: translation keys against icons,
+exceptions raised against exceptions declared, user-facing exceptions raised
+without a translation key, actions registered against actions described, the
+three version fields against each other, the quality scale against the pinned
 rule list. Run it before a push so the push is not the first verification.
 
     python tools/validate_local.py
@@ -143,6 +144,50 @@ def constants(source: str, prefix: str) -> dict[str, str]:
     return found
 
 
+# Every exception a user can see on the integration card or in an action
+# error. A raise of one of these without translation_key shows an English
+# f-string to every user, whatever their language.
+TRANSLATED_EXCEPTIONS = {
+    "HomeAssistantError",
+    "ServiceValidationError",
+    "ConfigEntryNotReady",
+    "ConfigEntryAuthFailed",
+    "ConfigEntryError",
+    "UpdateFailed",
+}
+
+
+def untranslated_raises(source: str, filename: str) -> list[str]:
+    """Raises of Home Assistant's user-facing exceptions that carry no key."""
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        func = node.exc.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+        if name not in TRANSLATED_EXCEPTIONS:
+            continue
+        keywords = {kw.arg for kw in node.exc.keywords}
+        if "translation_key" not in keywords:
+            found.append(
+                f"{filename}:{node.lineno} raises {name} without translation_key"
+            )
+    return found
+
+
+def pyproject_version() -> str | None:
+    """The version in pyproject.toml, or None when the file does not carry one."""
+    path = os.path.join(ROOT, "pyproject.toml")
+    if not os.path.isfile(path):
+        return None
+    import tomllib
+
+    with open(path, "rb") as fh:
+        project = tomllib.load(fh).get("project", {})
+    version = project.get("version")
+    return str(version) if version is not None else None
+
+
 def main() -> int:
     manifest = read_json(COMP, "manifest.json")
     const_src = read(COMP, "const.py")
@@ -186,6 +231,13 @@ def main() -> int:
         f"const.VERSION {const_version!r} != manifest version "
         f"{manifest.get('version')!r} - HA reports one and HACS the other",
     )
+    project_version = pyproject_version()
+    if project_version is not None:
+        check(
+            project_version == manifest.get("version"),
+            f"pyproject version {project_version!r} != manifest version "
+            f"{manifest.get('version')!r} - bump them together",
+        )
 
     # ---------------------------------------------------------- hacs.json
     hacs = read_json(ROOT, "hacs.json")
@@ -304,10 +356,17 @@ def main() -> int:
     )
 
     # ------------------------------------------------- exception translations
+    # Two checks: every key raised is declared (and vice versa), and no
+    # user-facing exception is raised without a key anywhere in the
+    # component - setup and poll failures in __init__.py and coordinator.py
+    # included, since those show on the integration card.
     raised: set[str] = set()
     for f in sorted(os.listdir(COMP)):
         if f.endswith(".py"):
-            raised |= set(exc_re.findall(read(COMP, f)))
+            source = read(COMP, f)
+            raised |= set(exc_re.findall(source))
+            for message in untranslated_raises(source, f):
+                failures.append(message)
     declared_exc = set(strings.get("exceptions", {}))
     check(
         raised <= declared_exc,
