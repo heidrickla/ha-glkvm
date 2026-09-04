@@ -11,13 +11,18 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api import GlkvmClient
-from .const import DEFAULT_PORT, DEFAULT_VERIFY_SSL
+from .const import DEFAULT_PORT, DEFAULT_VERIFY_SSL, DOMAIN
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .services import async_setup_services
+
+# Nothing is configured from YAML; async_setup exists only to register the
+# actions, and hassfest wants that said explicitly.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,

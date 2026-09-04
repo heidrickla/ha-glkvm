@@ -164,6 +164,11 @@ def main() -> int:
         and all(c.startswith("@") for c in manifest["codeowners"]),
         "manifest codeowners entries must start with @",
     )
+    keys = list(manifest)
+    check(
+        keys[:2] == ["domain", "name"] and keys[2:] == sorted(keys[2:]),
+        "manifest keys must be domain, name, then alphabetical (hassfest MANIFEST)",
+    )
     if re.search(
         r"//(?:localhost|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)",
         manifest.get("documentation", ""),
