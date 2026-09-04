@@ -53,13 +53,10 @@ no_implicit_reexport = true
 # be reported as errors in the integration's own code.
 ignore_missing_imports = true
 follow_imports = "silent"
-# Relaxed only because Home Assistant is absent locally: without it every class
-# it exports is Any, so subclassing Entity reads as subclassing Any and
-# @callback reads as an untyped decorator. Both are noise in that state. CI
-# runs with Home Assistant installed, which is where the real check happens.
-disallow_subclassing_any = false
-disallow_untyped_decorators = false
-warn_unused_ignores = false
+# Nothing else is relaxed. Without Home Assistant installed every class it
+# exports is Any, so a local run reports subclassing Any and untyped
+# decorators; that run is not the check. The GitHub Tests job runs this
+# configuration with Home Assistant installed, and that run is.
 
 [[tool.mypy.overrides]]
 module = "tests.*"
