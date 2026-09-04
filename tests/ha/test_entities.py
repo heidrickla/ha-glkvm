@@ -89,7 +89,13 @@ async def test_without_an_atx_board_the_power_entities_are_unavailable(
 
 @pytest.mark.parametrize(
     "key",
-    ["stream_clients", "h264_bitrate", "memory_available", "network_rx_rate"],
+    [
+        "stream_clients",
+        "h264_bitrate",
+        "memory_available",
+        "network_rx_rate",
+        "network_tx_rate",
+    ],
 )
 async def test_disabled_by_default_sensors_are_not_added(
     hass, fake_client, config_entry, key
