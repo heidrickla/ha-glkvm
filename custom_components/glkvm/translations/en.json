@@ -33,7 +33,7 @@
           "host": "The KVM's LAN address.",
           "port": "443 unless you have moved the web interface.",
           "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
-          "password": "The KVM's password.",
+          "password": "The KVM's password. Leave empty to keep the current one.",
           "verify_ssl": "Leave off unless you have installed your own trusted certificate."
         }
       },

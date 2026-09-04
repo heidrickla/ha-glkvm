@@ -2,7 +2,6 @@ name: Validate
 
 # Runs on a self-hosted act_runner.
 #
-#
 # THE RUNNER IS SHARED AND ITS CAPACITY IS 1. Other agent sessions queue behind
 # anything pushed here, so an ordinary push runs ONE fast job. Anything that
 # installs Home Assistant is workflow_dispatch only.

@@ -94,6 +94,42 @@ async def test_reconfigure_updates_the_credentials(hass, fake_client, config_ent
     await hass.async_block_till_done()
 
 
+async def test_reconfigure_form_does_not_carry_the_stored_password(
+    hass, fake_client, config_entry
+):
+    config_entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reconfigure", "entry_id": config_entry.entry_id},
+    )
+    assert result["type"] is FlowResultType.FORM
+    schema = result["data_schema"].schema
+    for key in schema:
+        if key == CONF_PASSWORD:
+            # Neither the default nor the suggested value may be the secret.
+            assert key.default() == ""
+            assert (key.description or {}).get("suggested_value") in (None, "")
+            break
+    else:
+        pytest.fail("no password field on the reconfigure form")
+
+
+async def test_reconfigure_with_a_blank_password_keeps_the_stored_one(
+    hass, fake_client, config_entry
+):
+    config_entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reconfigure", "entry_id": config_entry.entry_id},
+        data={**ENTRY_DATA, CONF_HOST: "192.0.2.16", CONF_PASSWORD: ""},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert config_entry.data[CONF_HOST] == "192.0.2.16"
+    assert config_entry.data[CONF_PASSWORD] == ENTRY_DATA[CONF_PASSWORD]
+    await hass.async_block_till_done()
+
+
 async def test_reconfigure_refuses_a_different_unit(hass, fake_client, config_entry):
     config_entry.add_to_hass(hass)
     fake_client.system = replace(fake_client.system, serial="FFFFFFFFFFFFFFFF")

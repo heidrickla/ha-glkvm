@@ -7,11 +7,10 @@ core. The code is built for both from the first commit; neither is submitted.
 
 | Blocker | Detail |
 |---|---|
-| **Repository is private** | HACS requires a public repository. Deliberate until release. |
-| **Repository is on Gitea, not GitHub** | HACS submission targets a GitHub repo, and `hacs/default` is a GitHub PR. |
-| **GitHub Actions unavailable** | The two required workflows exist in `.github/workflows/`, gated to GitHub, and have never run there. A submission needs links to *successful* job runs. |
+| **No green GitHub Actions run yet** | The two required workflows in `.github/workflows/` are gated to GitHub and have not run there. A submission needs links to *successful* job runs. |
+| **No release** | HACS wants a full GitHub release on a green commit, not a tag. |
 
-None of these are code problems.
+Neither is a code problem.
 
 ## The Home Assistant layer tests run on Linux, not here
 
@@ -51,8 +50,8 @@ core-only; the validator refuses a manifest that claims a tier.
 ## HACS, in order (the order is load-bearing)
 
 1. **Make the GitHub repo public** with description, topics, licence, README
-   and issues enabled. Update `documentation` and `issue_tracker` in
-   `manifest.json`, which point at the LAN Gitea host.
+   and issues enabled. `documentation` and `issue_tracker` in
+   `manifest.json` already point at it.
 2. **Push and wait for green.** A push is not done until CI is green.
 3. **Bump `manifest.json` AND `const.VERSION` together** to the version about
    to be tagged, push, wait for green *again*.

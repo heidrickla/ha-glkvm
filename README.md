@@ -59,7 +59,7 @@ Wake-on-LAN list), and degrades where they are absent rather than guessing.
 
 **No custom firmware is needed.** Every call this integration makes goes to
 stock kvmd and GL.iNet endpoints over `https://<unit>`, and none of the
-modules patched by the [glkvm-firmware](../glkvm-firmware) project is on any
+modules patched by the glkvm-firmware project is on any
 path it uses (no Redfish, no OCR, no VNC, no port 8888, no Prometheus
 export). The unit it was verified against runs that project's provisioned
 1.10.0 image, and only two of its settings change what you see here — both
@@ -109,7 +109,8 @@ address is recognised, not added twice.
 
 Settings -> Devices & Services -> GL.iNet KVM -> Reconfigure changes the
 address, port, credentials or certificate check. The address must still answer
-as the same unit. There are no options beyond these.
+as the same unit, and a blank password keeps the current one. There are no
+options beyond these.
 
 When the unit starts refusing the credentials, Home Assistant stops polling
 and asks for them again. It stops rather than retrying because GL.iNet's

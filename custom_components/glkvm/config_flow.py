@@ -143,18 +143,27 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors, unique_id, _title = await self._async_try(user_input)
+            # A blank password keeps the stored one. That is safe both ways:
+            # a unit with authentication on never accepts an empty password,
+            # and a unit with it off accepts anything.
+            data = dict(user_input)
+            if not data.get(CONF_PASSWORD):
+                data[CONF_PASSWORD] = entry.data.get(CONF_PASSWORD, "")
+            errors, unique_id, _title = await self._async_try(data)
             if not errors and unique_id is not None:
                 await self.async_set_unique_id(unique_id)
                 # The address must still answer as the same unit; a different
                 # serial means the user pointed this entry at another KVM.
                 self._abort_if_unique_id_mismatch(reason="another_device")
-                return self.async_update_reload_and_abort(entry, data=user_input)
+                return self.async_update_reload_and_abort(entry, data=data)
+        # The stored password never goes back to the browser: a form default
+        # is sent to the frontend, where the password field can reveal it.
+        shown = {
+            k: v for k, v in (user_input or entry.data).items() if k != CONF_PASSWORD
+        }
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self.add_suggested_values_to_schema(
-                _user_schema(entry.data), user_input or entry.data
-            ),
+            data_schema=self.add_suggested_values_to_schema(_user_schema(shown), shown),
             errors=errors,
         )
 

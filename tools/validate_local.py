@@ -164,7 +164,10 @@ def main() -> int:
         and all(c.startswith("@") for c in manifest["codeowners"]),
         "manifest codeowners entries must start with @",
     )
-    if "10.10." in manifest.get("documentation", ""):
+    if re.search(
+        r"//(?:localhost|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)",
+        manifest.get("documentation", ""),
+    ):
         notes.append("documentation URL points at a LAN host - useless to a user")
     check(
         "quality_scale" not in manifest,
