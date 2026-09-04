@@ -50,6 +50,8 @@ async def _identify(hass: HomeAssistant, data: Mapping[str, Any]) -> tuple[str, 
     client = _client(hass, data)
     await client.check_auth()
     system = await client.get_system()
+    # A unit that reports no serial is keyed on its address instead, which
+    # still keeps one entry per unit as long as the address holds.
     unique_id = system.serial or str(data[CONF_HOST])
     # kvmd's own meta reports localhost.localdomain; GL.iNet's endpoint has
     # the name the user gave the unit.
@@ -60,47 +62,39 @@ async def _identify(hass: HomeAssistant, data: Mapping[str, Any]) -> tuple[str, 
     return unique_id, title
 
 
-def _user_schema(defaults: Mapping[str, Any]) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_HOST, default=defaults.get(CONF_HOST, vol.UNDEFINED)
-            ): str,
-            vol.Required(
-                CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)
-            ): cv.port,
-            vol.Optional(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): str,
-            vol.Optional(
-                CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")
-            ): selector.TextSelector(
-                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-            ),
-            vol.Required(
-                CONF_VERIFY_SSL,
-                default=defaults.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
-            ): bool,
-        }
-    )
+_PASSWORD = selector.TextSelector(
+    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+)
 
+# The password has no default on purpose. A default is sent to the frontend,
+# where the field can reveal it, and it is also applied when the user clears
+# the field, so a blanked password would silently resubmit the old one. What
+# the user typed is carried across an error as suggested values instead.
+USER_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
+        vol.Optional(CONF_USERNAME, default=""): str,
+        vol.Optional(CONF_PASSWORD): _PASSWORD,
+        vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
+    }
+)
 
 _REAUTH_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_USERNAME, default=""): str,
-        vol.Optional(CONF_PASSWORD, default=""): selector.TextSelector(
-            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-        ),
+        vol.Optional(CONF_PASSWORD): _PASSWORD,
     }
 )
 
 
-class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
-    """Handle setup, reconfigure and reauth for one KVM.
+def _without_password(data: Mapping[str, Any]) -> dict[str, Any]:
+    """What may go back to the browser as suggested values: never the secret."""
+    return {k: v for k, v in data.items() if k != CONF_PASSWORD}
 
-    The ignore is for a workstation without Home Assistant, where ConfigFlow
-    is Any and mypy does not know its __init_subclass__ takes `domain`. With
-    Home Assistant installed (CI) it is unused, and unused ignores are not
-    warned about for exactly this reason.
-    """
+
+class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle setup, reconfigure and reauth for one KVM."""
 
     VERSION = 1
 
@@ -126,13 +120,16 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             errors, unique_id, title = await self._async_try(user_input)
             if not errors and unique_id is not None:
                 await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured(
-                    updates={CONF_HOST: user_input[CONF_HOST]}
-                )
+                # Re-adding a known unit refreshes everything it was reached
+                # with, not only the address: a moved unit may also have a
+                # new port or a new password.
+                self._abort_if_unique_id_configured(updates=dict(user_input))
                 return self.async_create_entry(title=title or NAME, data=user_input)
         return self.async_show_form(
             step_id="user",
-            data_schema=_user_schema(user_input or {}),
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA, _without_password(user_input or {})
+            ),
             errors=errors,
         )
 
@@ -156,14 +153,11 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
                 # serial means the user pointed this entry at another KVM.
                 self._abort_if_unique_id_mismatch(reason="another_device")
                 return self.async_update_reload_and_abort(entry, data=data)
-        # The stored password never goes back to the browser: a form default
-        # is sent to the frontend, where the password field can reveal it.
-        shown = {
-            k: v for k, v in (user_input or entry.data).items() if k != CONF_PASSWORD
-        }
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self.add_suggested_values_to_schema(_user_schema(shown), shown),
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA, _without_password(user_input or entry.data)
+            ),
             errors=errors,
         )
 
