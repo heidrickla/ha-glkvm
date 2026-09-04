@@ -95,9 +95,17 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             self.system = await self.client.get_system()
             self.firmware = await self.client.get_firmware()
         except GlkvmAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         except GlkvmConnectionError as err:
-            raise UpdateFailed(f"KVM unreachable: {err}") from err
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="unreachable",
+                translation_placeholders={"error": str(err)},
+            ) from err
         except GlkvmError as err:
             # Identity is decoration on the device page; a unit that answers
             # its state reads but not /api/info still works.
@@ -135,9 +143,17 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
         if auth_failures:
             # Stop here rather than retry: the next poll with the same
             # credentials would count towards GL.iNet's login lockout.
-            raise ConfigEntryAuthFailed(auth_failures[0])
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+                translation_placeholders={"error": auth_failures[0]},
+            )
         if len(connection_failures) == 7:
-            raise UpdateFailed(f"KVM unreachable: {connection_failures[0]}")
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="unreachable",
+                translation_placeholders={"error": connection_failures[0]},
+            )
         if connection_failures:
             _LOGGER.debug("Partial poll: %s", "; ".join(connection_failures))
 

@@ -179,6 +179,9 @@
     "command_failed": {
       "message": "The KVM did not carry out the command: {error}"
     },
+    "unreachable": {
+      "message": "The KVM could not be reached: {error}"
+    },
     "no_image_selected": {
       "message": "No virtual media image is selected. Choose one with the Virtual media image select first."
     },
