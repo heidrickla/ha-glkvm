@@ -3,14 +3,29 @@
 Two destinations, in order: HACS as a custom integration, then Home Assistant
 core. The code is built for both from the first commit; neither is submitted.
 
-## What blocks a HACS submission today
+## Status
 
-| Blocker | Detail |
+| Step | State |
 |---|---|
-| **No green GitHub Actions run yet** | The two required workflows in `.github/workflows/` are gated to GitHub and have not run there. A submission needs links to *successful* job runs. |
-| **No release** | HACS wants a full GitHub release on a green commit, not a tag. |
+| Public GitHub repository | Done: `heidrickla/ha-glkvm`, issues on, topics set. |
+| HACS and hassfest actions green | Done on `main`; both run on every push. |
+| Release after green | `v0.1.0`, created on a green commit. |
+| `hacs/default` pull request | **Not opened.** The branch is staged on the `heidrickla/default` fork; see below. |
 
-Neither is a code problem.
+### Opening the pull request
+
+The fork carries branch `add-heidrickla-ha-glkvm` with the one-line insert.
+Open it from the fork against `hacs/default` `master`, titled
+`Adds new integration [heidrickla/ha-glkvm]`, body = their template with
+every box ticked and the three links. Current links come from:
+
+```bash
+gh release view v0.1.0 --repo heidrickla/ha-glkvm --json url --jq .url
+gh run list --repo heidrickla/ha-glkvm --workflow Validate --branch main --limit 1 --json databaseId,conclusion
+```
+
+The HACS and hassfest links are the two *job* URLs inside that Validate run.
+After opening, leave it alone: the queue is oldest-first and comments delay it.
 
 ## The Home Assistant layer tests run on Linux, not here
 
