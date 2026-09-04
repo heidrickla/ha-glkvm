@@ -16,7 +16,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api import GlkvmClient
-from .const import DOMAIN
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 from .models import GpioChannel, KvmData, WolTarget
@@ -95,24 +94,30 @@ async def async_setup_entry(
 
     # Wake-on-LAN targets are edited in the unit's web UI at any time, so
     # they are the one dynamic set: new targets appear as buttons on the next
-    # poll and removed ones are taken out of the registry.
+    # poll and removed ones are taken out of the registry. The registry, not
+    # this platform's memory, says which buttons exist, so a target removed
+    # while the entry was unloaded is cleaned up at the next setup too.
     registry = er.async_get(hass)
-    known: set[str] = set()
+    prefix = f"{coordinator.unique_id}_wake_"
+    added: set[str] = set()
 
     @callback
     def _sync_wol_targets() -> None:
-        current = {t.mac: t for t in coordinator.data.wol} if coordinator.data else {}
-        added = [current[mac] for mac in current if mac not in known]
-        if added:
-            async_add_entities(GlkvmWakeButton(coordinator, t) for t in added)
-            known.update(t.mac for t in added)
-        for mac in [mac for mac in known if mac not in current]:
-            entity_id = registry.async_get_entity_id(
-                Platform.BUTTON, DOMAIN, f"{coordinator.unique_id}_{_wake_key(mac)}"
-            )
-            if entity_id:
-                registry.async_remove(entity_id)
-            known.discard(mac)
+        targets = coordinator.data.wol if coordinator.data else ()
+        current = {_wake_key(t.mac): t for t in targets}
+        new = [t for key, t in current.items() if key not in added]
+        if new:
+            async_add_entities(GlkvmWakeButton(coordinator, t) for t in new)
+            added.update(_wake_key(t.mac) for t in new)
+        for registered in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if registered.domain != Platform.BUTTON:
+                continue
+            if not registered.unique_id.startswith(prefix):
+                continue
+            key = registered.unique_id.removeprefix(f"{coordinator.unique_id}_")
+            if key not in current:
+                registry.async_remove(registered.entity_id)
+                added.discard(key)
 
     _sync_wol_targets()
     entry.async_on_unload(coordinator.async_add_listener(_sync_wol_targets))

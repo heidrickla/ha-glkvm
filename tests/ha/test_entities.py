@@ -240,6 +240,26 @@ class FakeWol:
         return WolTarget.list_from_result(result("wol_list.json"))
 
 
+async def test_a_wake_button_for_a_target_removed_while_unloaded_is_cleaned_up(
+    hass, fake_client, config_entry
+):
+    # A previous run created a button for a target that has since been
+    # deleted on the unit, while Home Assistant was not watching.
+    config_entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    stale = registry.async_get_or_create(
+        "button", DOMAIN, f"{SERIAL}_wake_020000000099", config_entry=config_entry
+    )
+    live_unique_id = f"{SERIAL}_wake_{WOL_MAC.replace(':', '')}"
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert registry.async_get(stale.entity_id) is None
+    assert registry.async_get_entity_id("button", DOMAIN, live_unique_id) is not None
+    # Nothing else of the entry's was touched.
+    assert hass.states.get("button.kvm_reset") is not None
+
+
 async def test_a_failed_command_is_a_translated_error(hass, fake_client, config_entry):
     await setup_entry(hass, config_entry)
     fake_client.fail = GlkvmResponseError(500, "AtxIsBusyError", "busy")
