@@ -18,7 +18,7 @@ from homeassistant.const import (
     UnitOfInformation,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
@@ -34,9 +34,11 @@ PARALLEL_UPDATES = 0
 class GlkvmSensorDescription(SensorEntityDescription):
     """A sensor plus how to pull its value out of one poll.
 
-    `exists_fn` decides at setup whether the entity is created at all: the
-    health section is absent on firmware 1.8.1, and creating nine sensors that
-    can only ever read unknown is worse than creating none.
+    `exists_fn` decides whether the entity is created at all: the health
+    section is absent on firmware 1.8.1, and creating six sensors that can
+    only ever read unknown is worse than creating none. It is asked again on
+    every refresh, so a section that was merely unreadable on the first poll
+    still gets its sensors when it answers.
     """
 
     value_fn: Callable[[KvmData], StateType]
@@ -188,11 +190,21 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(
-        GlkvmSensor(coordinator, description)
-        for description in SENSORS
-        if description.exists_fn(coordinator.data)
-    )
+    added: set[str] = set()
+
+    @callback
+    def _add_existing() -> None:
+        new = [
+            description
+            for description in SENSORS
+            if description.key not in added and description.exists_fn(coordinator.data)
+        ]
+        if new:
+            async_add_entities(GlkvmSensor(coordinator, d) for d in new)
+            added.update(d.key for d in new)
+
+    _add_existing()
+    entry.async_on_unload(coordinator.async_add_listener(_add_existing))
 
 
 class GlkvmSensor(GlkvmEntity, SensorEntity):

@@ -1,6 +1,7 @@
 """Setup, unload, the two failure modes, and the repair issues."""
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
 from custom_components.glkvm.api import GlkvmAuthError, GlkvmConnectionError
@@ -13,7 +14,7 @@ from custom_components.glkvm.const import (
     SERVICE_TYPE_TEXT,
     SERVICE_WAKE,
 )
-from custom_components.glkvm.models import MsdState, StreamerState
+from custom_components.glkvm.models import Health, MsdState, StreamerState
 from tests.pure import result
 
 from .conftest import setup_entry
@@ -88,6 +89,27 @@ async def test_health_sensors_are_not_created_where_the_firmware_has_none(
     await setup_entry(hass, config_entry)
     assert hass.states.get("sensor.kvm_cpu_temperature") is None
     assert hass.states.get("sensor.kvm_capture_resolution") is not None
+
+
+async def test_health_sensors_appear_once_the_section_answers(
+    hass, fake_client, config_entry
+):
+    # The health read failed on the first poll only. That must not look like
+    # firmware without a health section for the life of the entry.
+    fake_client.health = None
+    await setup_entry(hass, config_entry)
+    assert hass.states.get("sensor.kvm_cpu_temperature") is None
+
+    fake_client.health = Health.from_info(result("info.json"))
+    await _poll(hass, config_entry)
+    assert hass.states.get("sensor.kvm_cpu_temperature").state == "47.03"
+    assert hass.states.get("sensor.kvm_cpu_usage") is not None
+    # A second poll does not create them twice.
+    registry = er.async_get(hass)
+    before = len(er.async_entries_for_config_entry(registry, config_entry.entry_id))
+    await _poll(hass, config_entry)
+    after = len(er.async_entries_for_config_entry(registry, config_entry.entry_id))
+    assert after == before
 
 
 async def test_unload_removes_the_entities_but_not_the_actions(
