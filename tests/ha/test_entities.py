@@ -322,6 +322,22 @@ async def test_send_keys_action(hass, fake_client, config_entry):
     ]
 
 
+@pytest.mark.parametrize("keys", [[""], [" "], ["  ", ""]])
+async def test_send_keys_refuses_a_list_with_no_key_in_it(
+    hass, fake_client, config_entry, keys
+):
+    # The schema only requires a non-empty list; blank names get this far.
+    await setup_entry(hass, config_entry)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_KEYS,
+            {ATTR_CONFIG_ENTRY_ID: config_entry.entry_id, ATTR_KEYS: keys},
+            blocking=True,
+        )
+    assert fake_client.calls == []
+
+
 async def test_wake_action_normalises_the_mac(hass, fake_client, config_entry):
     await setup_entry(hass, config_entry)
     await hass.services.async_call(
