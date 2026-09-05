@@ -70,8 +70,6 @@ integration does.
 - **The console-login example in the README is loadable.** It used `!input`
   inside a plain script, a tag that only resolves inside a blueprint, and is
   written as a script blueprint now.
-- The `documentation` and `issue_tracker` links in the manifest point at the
-  public GitHub repository.
 
 ## [0.1.0] - 2026-09-04
 
