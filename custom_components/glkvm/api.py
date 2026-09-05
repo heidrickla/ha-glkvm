@@ -34,6 +34,7 @@ from .models import (
     Health,
     HidState,
     MsdState,
+    NetworkConfig,
     StreamerState,
     SystemInfo,
     WolTarget,
@@ -245,6 +246,20 @@ class GlkvmClient:
             raise
         hostname = self._mapping(result).get("hostname")
         return hostname if isinstance(hostname, str) and hostname else None
+
+    async def get_network_config(self) -> NetworkConfig | None:
+        """The unit's own MAC and address; None where the endpoint is absent.
+
+        The MAC is what the unit puts in its mDNS TXT records, so it is what a
+        discovered unit is matched against. The endpoint needs authentication.
+        """
+        try:
+            result = await self._get("/api/system/get_network_config")
+        except GlkvmResponseError as err:
+            if err.status == 404:
+                return None
+            raise
+        return NetworkConfig.from_result(self._mapping(result))
 
     async def get_health(self) -> Health | None:
         """CPU, memory, temperature and network of the KVM itself.

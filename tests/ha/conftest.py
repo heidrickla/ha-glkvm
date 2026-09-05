@@ -40,6 +40,7 @@ from custom_components.glkvm.models import (
     Health,
     HidState,
     MsdState,
+    NetworkConfig,
     StreamerState,
     SystemInfo,
     WolTarget,
@@ -49,6 +50,10 @@ from tests.pure import result
 SERIAL = "0123456789ABCDEF"
 HOST = "192.0.2.15"
 WOL_MAC = "02:00:00:00:00:01"
+# The unit's own MAC, as /api/system/get_network_config reports it and as the
+# mDNS TXT record carries it (base64 of the twelve hex digits).
+UNIT_MAC = "94:83:c4:00:02:15"
+UNIT_MAC_TXT = "OTQ4M2M0MDAwMjE1"
 
 ENTRY_DATA = {
     CONF_HOST: HOST,
@@ -93,16 +98,24 @@ class FakeClient:
     wol: tuple[WolTarget, ...] = field(
         default_factory=lambda: WolTarget.list_from_result(result("wol_list.json"))
     )
+    network: NetworkConfig | None = field(
+        default_factory=lambda: NetworkConfig.from_result(result("network_config.json"))
+    )
     snapshot: bytes | None = b"\xff\xd8\xff\xe0jpeg"
     # When set, every call raises it - the way a whole unit fails.
     fail: Exception | None = None
+    # One read at a time, keyed by the name below - the way a single endpoint
+    # fails while the rest of the unit answers.
+    read_fail: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = field(
         default_factory=list
     )
 
-    def _check(self) -> None:
+    def _check(self, read: str | None = None) -> None:
         if self.fail is not None:
             raise self.fail
+        if read is not None and read in self.read_fail:
+            raise self.read_fail[read]
 
     def _record(self, name: str, *args: Any, **kwargs: Any) -> None:
         self._check()
@@ -116,43 +129,47 @@ class FakeClient:
         self._check()
 
     async def get_system(self) -> SystemInfo:
-        self._check()
+        self._check("system")
         return self.system
 
     async def get_firmware(self) -> FirmwareInfo | None:
-        self._check()
+        self._check("firmware")
         return self.firmware
 
     async def get_hostname(self) -> str | None:
-        self._check()
+        self._check("hostname")
         return self.hostname
 
+    async def get_network_config(self) -> NetworkConfig | None:
+        self._check("network")
+        return self.network
+
     async def get_health(self) -> Health | None:
-        self._check()
+        self._check("health")
         return self.health
 
     async def get_atx(self) -> AtxState:
-        self._check()
+        self._check("atx")
         return self.atx
 
     async def get_msd(self) -> MsdState:
-        self._check()
+        self._check("msd")
         return self.msd
 
     async def get_streamer(self) -> StreamerState:
-        self._check()
+        self._check("streamer")
         return self.streamer
 
     async def get_hid(self) -> HidState:
-        self._check()
+        self._check("hid")
         return self.hid
 
     async def get_gpio(self) -> GpioState:
-        self._check()
+        self._check("gpio")
         return self.gpio
 
     async def get_wol_targets(self) -> tuple[WolTarget, ...]:
-        self._check()
+        self._check("wol")
         return self.wol
 
     async def get_snapshot(self) -> bytes | None:

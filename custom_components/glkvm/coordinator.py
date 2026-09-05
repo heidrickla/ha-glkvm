@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_MAC
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import issue_registry as ir
@@ -26,6 +27,14 @@ from .const import (
     ISSUE_STREAMER_STOPPED,
     MANUFACTURER,
     SCAN_INTERVAL,
+    SECTION_ATX,
+    SECTION_GPIO,
+    SECTION_HEALTH,
+    SECTION_HID,
+    SECTION_MSD,
+    SECTION_STREAMER,
+    SECTION_WOL,
+    SECTIONS,
     STREAMER_STOPPED_POLLS,
 )
 from .models import FirmwareInfo, KvmData, SystemInfo
@@ -43,8 +52,9 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
     Each section (ATX, MSD, streamer, HID, GPIO, health, WOL) is read on its
     own rather than through the bare /api/info, which GL.iNet's firmware
     makes expensive, and each is allowed to fail on its own: a 500 from one
-    endpoint keeps that section's last value and leaves the rest live. Only
-    the unit being unreachable for every read fails the poll, and only a 401
+    endpoint leaves the rest live and names that section in KvmData.failed,
+    which is what makes its entities unavailable instead of stale. Only the
+    unit being unreachable for every read fails the poll, and only a 401
     stops polling - GL.iNet locks the account after repeated failures.
     """
 
@@ -110,11 +120,33 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             # Identity is decoration on the device page; a unit that answers
             # its state reads but not /api/info still works.
             _LOGGER.debug("Could not read identity: %s", err)
+        await self._async_refresh_mac()
+
+    async def _async_refresh_mac(self) -> None:
+        """Keep the unit's own MAC in entry data, for zeroconf to match on.
+
+        It can change under the user (a swapped unit at the same address, a
+        firmware that reports a different interface), so it is read at every
+        setup rather than only when the entry was created.
+        """
+        try:
+            network = await self.client.get_network_config()
+        except GlkvmError as err:
+            # Only discovery uses it. A firmware without the endpoint, or one
+            # that errors on it, must not stop a setup that has authenticated.
+            _LOGGER.debug("Could not read the network configuration: %s", err)
+            return
+        mac = network.mac if network else None
+        if mac and mac != self._entry.data.get(CONF_MAC):
+            self.hass.config_entries.async_update_entry(
+                self._entry, data={**self._entry.data, CONF_MAC: mac}
+            )
 
     async def _async_update_data(self) -> KvmData:
         previous = self.data or KvmData()
         auth_failures: list[str] = []
         connection_failures: list[str] = []
+        failed: list[str] = []
 
         async def guard(name: str, call: Callable[[], Awaitable[_T]]) -> _T | None:
             try:
@@ -123,7 +155,9 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
                 auth_failures.append(f"{name}: {err}")
             except GlkvmConnectionError as err:
                 connection_failures.append(f"{name}: {err}")
+                failed.append(name)
             except GlkvmError as err:
+                failed.append(name)
                 _LOGGER.debug("%s read failed, keeping the last value: %s", name, err)
             return None
 
@@ -131,14 +165,14 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
         # Six in the gather and one after: typeshed types gather for up to six
         # positional awaitables, and a seventh collapses the result to a union.
         atx, msd, streamer, hid, gpio, health = await asyncio.gather(
-            guard("atx", client.get_atx),
-            guard("msd", client.get_msd),
-            guard("streamer", client.get_streamer),
-            guard("hid", client.get_hid),
-            guard("gpio", client.get_gpio),
-            guard("health", client.get_health),
+            guard(SECTION_ATX, client.get_atx),
+            guard(SECTION_MSD, client.get_msd),
+            guard(SECTION_STREAMER, client.get_streamer),
+            guard(SECTION_HID, client.get_hid),
+            guard(SECTION_GPIO, client.get_gpio),
+            guard(SECTION_HEALTH, client.get_health),
         )
-        wol = await guard("wol", client.get_wol_targets)
+        wol = await guard(SECTION_WOL, client.get_wol_targets)
 
         if auth_failures:
             # Stop here rather than retry: the next poll with the same
@@ -148,7 +182,7 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
                 translation_key="auth_failed",
                 translation_placeholders={"error": auth_failures[0]},
             )
-        if len(connection_failures) == 7:
+        if len(connection_failures) == len(SECTIONS):
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="unreachable",
@@ -167,6 +201,7 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             # section", so it must not be back-filled from a previous poll.
             health=health,
             wol=wol if wol is not None else previous.wol,
+            failed=tuple(failed),
         )
         self._update_issues(data)
         return data

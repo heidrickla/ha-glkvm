@@ -187,3 +187,35 @@ def test_numeric_helpers_reject_booleans():
     assert models._as_float(False) is None
     assert models._as_int(3.0) == 3
     assert models._as_int(3.5) is None
+
+
+def test_network_config_reads_the_units_own_mac():
+    net = models.NetworkConfig.from_result(result("network_config.json"))
+    assert net.mac == "94:83:c4:00:02:15"
+    assert net.ip == "192.0.2.15"
+    assert net.interface == "eth0"
+    assert net.is_dhcp is True
+
+
+def test_network_config_tolerates_a_body_without_a_config():
+    net = models.NetworkConfig.from_result({})
+    assert net.mac is None and net.ip is None and net.is_dhcp is None
+
+
+def test_keys_that_are_not_names_are_skipped():
+    # A firmware that puts a number or an empty key where a name belongs must
+    # lose that one entry, not the whole section.
+    msd = models.MsdState.from_result(
+        {"storage": {"images": {"": {"size": 1}, "real.iso": {"size": 2}}}}
+    )
+    assert [image.name for image in msd.images] == ["real.iso"]
+
+    gpio = models.GpioState.from_result(
+        {"model": {"scheme": {"outputs": {"": {"switch": True}, "relay": {}}}}}
+    )
+    assert [channel.channel for channel in gpio.outputs] == ["relay"]
+
+    wol = models.WolTarget.list_from_result(
+        {"devices": [{"name": "no mac"}, {"mac": "02:00:00:00:00:09"}]}
+    )
+    assert [target.mac for target in wol] == ["02:00:00:00:00:09"]

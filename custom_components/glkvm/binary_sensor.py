@@ -14,6 +14,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import SECTION_GPIO, SECTION_HID, SECTION_STREAMER
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 from .models import GpioChannel, KvmData
@@ -24,10 +25,15 @@ PARALLEL_UPDATES = 0
 
 @dataclass(frozen=True, kw_only=True)
 class GlkvmBinarySensorDescription(BinarySensorEntityDescription):
-    """A binary sensor plus how to read it out of one poll."""
+    """A binary sensor plus how to read it out of one poll.
+
+    `section` is the poll section it reads; a poll in which that section
+    failed makes the sensor unavailable rather than stale.
+    """
 
     value_fn: Callable[[KvmData], bool | None]
     available_fn: Callable[[KvmData], bool] = lambda _data: True
+    section: str | None = None
 
 
 SENSORS: tuple[GlkvmBinarySensorDescription, ...] = (
@@ -36,6 +42,7 @@ SENSORS: tuple[GlkvmBinarySensorDescription, ...] = (
     GlkvmBinarySensorDescription(
         key="video_signal",
         translation_key="video_signal",
+        section=SECTION_STREAMER,
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         value_fn=lambda d: d.streamer.signal if d.streamer else None,
         available_fn=lambda d: d.streamer is not None and d.streamer.running,
@@ -43,6 +50,7 @@ SENSORS: tuple[GlkvmBinarySensorDescription, ...] = (
     GlkvmBinarySensorDescription(
         key="keyboard_online",
         translation_key="keyboard_online",
+        section=SECTION_HID,
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.hid.keyboard_online if d.hid else None,
@@ -51,6 +59,7 @@ SENSORS: tuple[GlkvmBinarySensorDescription, ...] = (
     GlkvmBinarySensorDescription(
         key="mouse_online",
         translation_key="mouse_online",
+        section=SECTION_HID,
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.hid.mouse_online if d.hid else None,
@@ -88,7 +97,7 @@ class GlkvmBinarySensor(GlkvmEntity, BinarySensorEntity):
         coordinator: GlkvmCoordinator,
         description: GlkvmBinarySensorDescription,
     ) -> None:
-        super().__init__(coordinator, description.key)
+        super().__init__(coordinator, description.key, section=description.section)
         self.entity_description = description
 
     @property
@@ -106,7 +115,9 @@ class GlkvmGpioInput(GlkvmEntity, BinarySensorEntity):
     _attr_translation_key = "gpio_input"
 
     def __init__(self, coordinator: GlkvmCoordinator, channel: GpioChannel) -> None:
-        super().__init__(coordinator, f"gpio_in_{channel.channel}")
+        super().__init__(
+            coordinator, f"gpio_in_{channel.channel}", section=SECTION_GPIO
+        )
         self._channel = channel.channel
         self._attr_translation_placeholders = {"channel": channel.channel}
 

@@ -21,7 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api import GlkvmError
-from .const import MANUFACTURER
+from .const import MANUFACTURER, SECTION_STREAMER
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 
@@ -49,7 +49,7 @@ class GlkvmScreenCamera(GlkvmEntity, Camera):
     _attr_frame_interval = 2.0
 
     def __init__(self, coordinator: GlkvmCoordinator) -> None:
-        GlkvmEntity.__init__(self, coordinator, "screen")
+        GlkvmEntity.__init__(self, coordinator, "screen", section=SECTION_STREAMER)
         Camera.__init__(self)
 
     @property

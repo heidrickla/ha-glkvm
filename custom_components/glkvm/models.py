@@ -99,6 +99,32 @@ class FirmwareInfo:
 
 
 @dataclass(frozen=True)
+class NetworkConfig:
+    """GL.iNet's /api/system/get_network_config: the unit's own LAN identity.
+
+    The MAC matters because it is the only key the unit shares with its mDNS
+    announcement. The serial an entry is keyed on is behind authentication
+    and is not in the TXT records, so a discovered unit is recognised by MAC.
+    """
+
+    mac: str | None = None
+    ip: str | None = None
+    interface: str | None = None
+    is_dhcp: bool | None = None
+
+    @classmethod
+    def from_result(cls, result: Mapping[str, Any]) -> NetworkConfig:
+        config = _dig(result, "config")
+        mac = _as_str(_dig(config, "mac_address"))
+        return cls(
+            mac=mac.lower() if mac else None,
+            ip=_as_str(_dig(config, "ip_address")),
+            interface=_as_str(_dig(config, "interface")),
+            is_dhcp=_as_bool(_dig(config, "is_dhcp")),
+        )
+
+
+@dataclass(frozen=True)
 class Health:
     """The `health` info section: the KVM's own CPU, memory and network."""
 
@@ -412,7 +438,12 @@ class WolTarget:
 
 @dataclass
 class KvmData:
-    """One poll's worth of state. A None section means that read failed."""
+    """One poll's worth of state.
+
+    A section that failed to read keeps the value the last good poll left, so
+    the entity set does not churn, and its name goes in `failed`. Entities
+    reading a failed section report unavailable rather than that stale value.
+    """
 
     atx: AtxState | None = None
     msd: MsdState | None = None
@@ -421,3 +452,4 @@ class KvmData:
     gpio: GpioState | None = None
     health: Health | None = None
     wol: tuple[WolTarget, ...] = field(default_factory=tuple)
+    failed: tuple[str, ...] = field(default_factory=tuple)

@@ -82,6 +82,7 @@ def test_base_url_honours_a_non_default_port():
     session = _Session([])
     assert _client(session).base_url == "https://192.0.2.15"
     assert _client(session, port=8888).base_url == "https://192.0.2.15:8888"
+    assert _client(session).host == "192.0.2.15"
 
 
 def test_verify_ssl_is_passed_through_to_aiohttp():
@@ -168,6 +169,38 @@ def test_gl_endpoints_when_present():
     assert _run(client.get_hostname()) == "GL-RM10-Example"
 
 
+def test_the_network_config_carries_the_units_own_mac():
+    session = _Session([_json("network_config.json")])
+    net = _run(_client(session).get_network_config())
+    assert net is not None and net.mac == "94:83:c4:00:02:15"
+    assert session.calls[0]["url"].endswith("/api/system/get_network_config")
+
+
+def test_a_firmware_without_the_network_endpoint_reports_no_mac():
+    session = _Session([_Resp(404, b"<html>nginx 404</html>", "text/html")])
+    assert _run(_client(session).get_network_config()) is None
+
+
+def test_only_a_404_means_absent_on_the_gl_only_endpoints():
+    """Anything else is a fault and has to reach the caller.
+
+    Swallowing a 500 or a 403 the way a 404 is swallowed would read as
+    "this firmware does not have it" and hide a unit that is unwell.
+    """
+    error = {"ok": False, "result": {"error": "Error", "error_msg": "boom"}}
+    session = _Session([_json(error, status=500)] * 5)
+    client = _client(session)
+    for read in (
+        client.get_firmware,
+        client.get_hostname,
+        client.get_network_config,
+        client.get_health,
+        client.get_wol_targets,
+    ):
+        with pytest.raises(api.GlkvmResponseError):
+            _run(read())
+
+
 def test_snapshot_returns_the_jpeg():
     session = _Session([_Resp(200, b"\xff\xd8\xff\xe0jpeg", "image/jpeg")])
     assert _run(_client(session).get_snapshot()) == b"\xff\xd8\xff\xe0jpeg"
@@ -229,7 +262,11 @@ def test_atx_power_validates_the_action_locally():
 
 def test_atx_click():
     session = _Session([_json({"ok": True, "result": {}})])
-    _run(_client(session).atx_click("power_long", wait=False))
+    client = _client(session)
+    with pytest.raises(ValueError):
+        _run(client.atx_click("kick"))
+    assert session.calls == []
+    _run(client.atx_click("power_long", wait=False))
     assert session.calls[0]["url"].endswith("/api/atx/click")
     assert session.calls[0]["params"] == {"button": "power_long", "wait": "0"}
 

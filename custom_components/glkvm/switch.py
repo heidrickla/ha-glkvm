@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, SECTION_ATX, SECTION_GPIO, SECTION_HID, SECTION_MSD
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 from .models import GpioChannel
@@ -53,7 +53,7 @@ class GlkvmHostPowerSwitch(GlkvmEntity, SwitchEntity):
     _attr_device_class = SwitchDeviceClass.SWITCH
 
     def __init__(self, coordinator: GlkvmCoordinator) -> None:
-        super().__init__(coordinator, "host_power")
+        super().__init__(coordinator, "host_power", section=SECTION_ATX)
 
     @property
     def available(self) -> bool:
@@ -77,7 +77,7 @@ class GlkvmVirtualMediaSwitch(GlkvmEntity, SwitchEntity):
     _attr_device_class = SwitchDeviceClass.SWITCH
 
     def __init__(self, coordinator: GlkvmCoordinator) -> None:
-        super().__init__(coordinator, "virtual_media")
+        super().__init__(coordinator, "virtual_media", section=SECTION_MSD)
 
     @property
     def available(self) -> bool:
@@ -121,7 +121,7 @@ class GlkvmJigglerSwitch(GlkvmEntity, SwitchEntity):
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: GlkvmCoordinator) -> None:
-        super().__init__(coordinator, "mouse_jiggler")
+        super().__init__(coordinator, "mouse_jiggler", section=SECTION_HID)
 
     @property
     def available(self) -> bool:
@@ -150,7 +150,9 @@ class GlkvmGpioSwitch(GlkvmEntity, SwitchEntity):
     _attr_translation_key = "gpio_output"
 
     def __init__(self, coordinator: GlkvmCoordinator, channel: GpioChannel) -> None:
-        super().__init__(coordinator, f"gpio_out_{channel.channel}")
+        super().__init__(
+            coordinator, f"gpio_out_{channel.channel}", section=SECTION_GPIO
+        )
         self._channel = channel.channel
         self._attr_translation_placeholders = {"channel": channel.channel}
 

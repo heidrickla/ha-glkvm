@@ -22,6 +22,32 @@ DEFAULT_VERIFY_SSL = False
 # implementation, not the last.
 SCAN_INTERVAL = timedelta(seconds=30)
 
+# The seven sections one poll reads, each from its own endpoint. A section
+# that fails keeps its last value and its name goes in KvmData.failed, which
+# is what makes the entities reading it unavailable rather than stale.
+SECTION_ATX = "atx"
+SECTION_MSD = "msd"
+SECTION_STREAMER = "streamer"
+SECTION_HID = "hid"
+SECTION_GPIO = "gpio"
+SECTION_HEALTH = "health"
+SECTION_WOL = "wol"
+SECTIONS = (
+    SECTION_ATX,
+    SECTION_MSD,
+    SECTION_STREAMER,
+    SECTION_HID,
+    SECTION_GPIO,
+    SECTION_HEALTH,
+    SECTION_WOL,
+)
+
+# Zeroconf. The units announce _glinet._tcp.local. with TXT mn=<model>,
+# v=<firmware>, devid and mac=<base64 of the twelve hex digits>. The manifest
+# filters on mn, so only a Comet KVM reaches the flow; the MAC is the only key
+# the announcement shares with the unit's own API.
+ZEROCONF_MAC = "mac"
+
 # Repair issues.
 ISSUE_STREAMER_STOPPED = "streamer_stopped"
 ISSUE_MSD_OFFLINE = "msd_offline"

@@ -41,15 +41,29 @@ class GlkvmEntity(CoordinatorEntity[GlkvmCoordinator]):
     # and CoordinatorEntity resolves to Any.
     coordinator: GlkvmCoordinator
 
-    def __init__(self, coordinator: GlkvmCoordinator, key: str) -> None:
+    def __init__(
+        self, coordinator: GlkvmCoordinator, key: str, *, section: str | None = None
+    ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.unique_id}_{key}"
         self._attr_device_info = coordinator.device_info
+        # Which of the poll's seven sections this entity reads, if any.
+        self._section = section
 
     @property
     def data(self) -> KvmData:
         data: KvmData = self.coordinator.data
         return data
+
+    @property
+    def available(self) -> bool:
+        """False while the section this entity reads is failing.
+
+        A partial poll keeps the failed section's last value so the entity
+        set does not churn. Showing that value would be reporting state the
+        unit has not confirmed, so the entity goes unavailable instead.
+        """
+        return super().available and self._section not in self.data.failed
 
     async def _run(self, command: Awaitable[None]) -> None:
         """Send one command, translate its failure, then re-read the state.

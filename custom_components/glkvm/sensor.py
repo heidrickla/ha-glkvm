@@ -22,6 +22,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
+from .const import SECTION_HEALTH, SECTION_MSD, SECTION_STREAMER
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 from .models import Health, KvmData
@@ -39,11 +40,15 @@ class GlkvmSensorDescription(SensorEntityDescription):
     only ever read unknown is worse than creating none. It is asked again on
     every refresh, so a section that was merely unreadable on the first poll
     still gets its sensors when it answers.
+
+    `section` is the poll section the value comes from; a poll in which that
+    section failed makes the sensor unavailable rather than stale.
     """
 
     value_fn: Callable[[KvmData], StateType]
     available_fn: Callable[[KvmData], bool] = lambda _data: True
     exists_fn: Callable[[KvmData], bool] = lambda _data: True
+    section: str | None = None
 
 
 def _health(fn: Callable[[Health], StateType]) -> Callable[[KvmData], StateType]:
@@ -63,12 +68,14 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="capture_resolution",
         translation_key="capture_resolution",
+        section=SECTION_STREAMER,
         value_fn=lambda d: d.streamer.resolution if d.streamer else None,
         available_fn=_streamer_running,
     ),
     GlkvmSensorDescription(
         key="capture_fps",
         translation_key="capture_fps",
+        section=SECTION_STREAMER,
         native_unit_of_measurement="fps",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: d.streamer.captured_fps if d.streamer else None,
@@ -79,6 +86,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="stream_clients",
         translation_key="stream_clients",
+        section=SECTION_STREAMER,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -88,6 +96,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="h264_bitrate",
         translation_key="h264_bitrate",
+        section=SECTION_STREAMER,
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.BITS_PER_SECOND,
         suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
@@ -102,6 +111,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="media_storage_free",
         translation_key="media_storage_free",
+        section=SECTION_MSD,
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
@@ -115,6 +125,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="cpu_temperature",
         translation_key="cpu_temperature",
+        section=SECTION_HEALTH,
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -126,6 +137,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="cpu_usage",
         translation_key="cpu_usage",
+        section=SECTION_HEALTH,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -136,6 +148,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="memory_usage",
         translation_key="memory_usage",
+        section=SECTION_HEALTH,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -148,6 +161,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="memory_available",
         translation_key="memory_available",
+        section=SECTION_HEALTH,
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
@@ -161,6 +175,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="network_rx_rate",
         translation_key="network_rx_rate",
+        section=SECTION_HEALTH,
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
         suggested_unit_of_measurement=UnitOfDataRate.KILOBYTES_PER_SECOND,
@@ -174,6 +189,7 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
     GlkvmSensorDescription(
         key="network_tx_rate",
         translation_key="network_tx_rate",
+        section=SECTION_HEALTH,
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
         suggested_unit_of_measurement=UnitOfDataRate.KILOBYTES_PER_SECOND,
@@ -220,7 +236,7 @@ class GlkvmSensor(GlkvmEntity, SensorEntity):
         coordinator: GlkvmCoordinator,
         description: GlkvmSensorDescription,
     ) -> None:
-        super().__init__(coordinator, description.key)
+        super().__init__(coordinator, description.key, section=description.section)
         self.entity_description = description
 
     @property

@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, SECTION_HID, SECTION_MSD
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 
@@ -40,7 +40,7 @@ class GlkvmImageSelect(GlkvmEntity, SelectEntity):
     _attr_translation_key = "virtual_media_image"
 
     def __init__(self, coordinator: GlkvmCoordinator) -> None:
-        super().__init__(coordinator, "virtual_media_image")
+        super().__init__(coordinator, "virtual_media_image", section=SECTION_MSD)
 
     @property
     def available(self) -> bool:
@@ -73,7 +73,7 @@ class GlkvmMouseOutputSelect(GlkvmEntity, SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: GlkvmCoordinator) -> None:
-        super().__init__(coordinator, "mouse_output")
+        super().__init__(coordinator, "mouse_output", section=SECTION_HID)
 
     @property
     def available(self) -> bool:

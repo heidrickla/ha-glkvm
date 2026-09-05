@@ -16,6 +16,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api import GlkvmClient
+from .const import SECTION_ATX, SECTION_GPIO, SECTION_HID, SECTION_WOL
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 from .models import GpioChannel, KvmData, WolTarget
@@ -26,10 +27,15 @@ PARALLEL_UPDATES = 1
 
 @dataclass(frozen=True, kw_only=True)
 class GlkvmButtonDescription(ButtonEntityDescription):
-    """A button plus the command it sends."""
+    """A button plus the command it sends.
+
+    `section` is the poll section that says whether the button can be pressed;
+    a poll in which it failed makes the button unavailable.
+    """
 
     press_fn: Callable[[GlkvmClient], Awaitable[None]]
     available_fn: Callable[[KvmData], bool] = lambda _data: True
+    section: str | None = None
 
 
 def _atx_present(data: KvmData) -> bool:
@@ -44,18 +50,21 @@ BUTTONS: tuple[GlkvmButtonDescription, ...] = (
     GlkvmButtonDescription(
         key="power_button",
         translation_key="power_button",
+        section=SECTION_ATX,
         press_fn=lambda c: c.atx_click("power"),
         available_fn=_atx_present,
     ),
     GlkvmButtonDescription(
         key="power_long",
         translation_key="power_long",
+        section=SECTION_ATX,
         press_fn=lambda c: c.atx_click("power_long"),
         available_fn=_atx_present,
     ),
     GlkvmButtonDescription(
         key="reset",
         translation_key="reset",
+        section=SECTION_ATX,
         device_class=ButtonDeviceClass.RESTART,
         press_fn=lambda c: c.atx_click("reset"),
         available_fn=_atx_present,
@@ -63,6 +72,7 @@ BUTTONS: tuple[GlkvmButtonDescription, ...] = (
     GlkvmButtonDescription(
         key="hid_reset",
         translation_key="hid_reset",
+        section=SECTION_HID,
         device_class=ButtonDeviceClass.RESTART,
         entity_category=EntityCategory.DIAGNOSTIC,
         press_fn=lambda c: c.hid_reset(),
@@ -131,7 +141,7 @@ class GlkvmButton(GlkvmEntity, ButtonEntity):
     def __init__(
         self, coordinator: GlkvmCoordinator, description: GlkvmButtonDescription
     ) -> None:
-        super().__init__(coordinator, description.key)
+        super().__init__(coordinator, description.key, section=description.section)
         self.entity_description = description
 
     @property
@@ -148,7 +158,9 @@ class GlkvmGpioPulseButton(GlkvmEntity, ButtonEntity):
     _attr_translation_key = "gpio_pulse"
 
     def __init__(self, coordinator: GlkvmCoordinator, channel: GpioChannel) -> None:
-        super().__init__(coordinator, f"gpio_out_{channel.channel}")
+        super().__init__(
+            coordinator, f"gpio_out_{channel.channel}", section=SECTION_GPIO
+        )
         self._channel = channel.channel
         self._attr_translation_placeholders = {"channel": channel.channel}
 
@@ -171,7 +183,7 @@ class GlkvmWakeButton(GlkvmEntity, ButtonEntity):
     _attr_translation_key = "wake"
 
     def __init__(self, coordinator: GlkvmCoordinator, target: WolTarget) -> None:
-        super().__init__(coordinator, _wake_key(target.mac))
+        super().__init__(coordinator, _wake_key(target.mac), section=SECTION_WOL)
         self._mac = target.mac
         self._attr_translation_placeholders = {"target": target.name}
 
