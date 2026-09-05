@@ -9,8 +9,9 @@ core. The code is built for both from the first commit; neither is submitted.
 |---|---|
 | Public GitHub repository | Done: `heidrickla/ha-glkvm`, issues on, topics set. |
 | HACS and hassfest actions green | Done on `main`; both run on every push. |
-| Release after green | `v0.1.0`, created on a green commit. |
+| Release after green | `v0.1.0`, created on `b030256`. Everything since is unreleased; `CHANGELOG.md` lists it. |
 | `hacs/default` pull request | **Not opened.** The branch is staged on the `heidrickla/default` fork; see below. |
+| Forge (`gitea`) copy | **Behind GitHub.** Pushes go to `origin` only while the shared runner is busy; one catch-up push when it is quiet. |
 
 ### Opening the pull request
 
@@ -29,16 +30,18 @@ After opening, leave it alone: the queue is oldest-first and comments delay it.
 
 ## The Home Assistant layer tests run on Linux, not here
 
-`tests/ha/` covers setup and unload, the config, reconfigure and reauth flows
-with their refusals and their recovery from each, every entity's state
-against recorded bodies, every command and action against a recorded client,
-the two repair issues, and diagnostics redaction. The GitHub `Tests` workflow
+`tests/ha/` covers setup and unload, the config, zeroconf, reconfigure and
+reauth flows with their refusals and their recovery from each, every entity's
+state against recorded bodies, a poll in which each of the seven sections
+fails on its own, every command and action against a recorded client, the two
+repair issues, and diagnostics redaction. The GitHub `Tests` workflow
 (`.github/workflows/tests.yml`) runs them on every push against the pinned
-Home Assistant release, reports coverage, and runs mypy in strict mode with
-Home Assistant installed. The forge's `Home Assistant layer` job
-(`.gitea/workflows/validate.yml`) runs the same suite on `workflow_dispatch`
-only, because that runner is shared. They do not run on Windows: the harness
-blocks sockets and the ProactorEventLoop needs a local socket pair.
+Home Assistant release, gates coverage of both suites together at 95%, and
+runs mypy in strict mode with Home Assistant installed. The forge's `Home
+Assistant layer` job (`.gitea/workflows/validate.yml`) runs the same suite on
+`workflow_dispatch` only, because that runner is shared. They do not run on
+Windows: the harness blocks sockets and the ProactorEventLoop needs a local
+socket pair.
 
 They skip when the harness is absent, so a bare checkout runs only the pure
 suite and does not imply coverage it does not have.
@@ -47,17 +50,17 @@ suite and does not imply coverage it does not have.
 
 `custom_components/glkvm/quality_scale.yaml` tracks every rule with a written
 reason on each exemption. `tools/validate_local.py` checks it against the
-pinned rule list.
+pinned rule list, and refuses a `done` the file set contradicts: `discovery`
+without a discovery key in the manifest and a step to answer it,
+`reauthentication-flow` without the unique-id check, `entity-unavailable`
+without an entity that consults the failed sections, `test-coverage` without
+a workflow that gates on a threshold, `strict-typing` with a relaxation in
+pyproject.
 
-Rules marked `todo`, and what clears each:
-
-| Rule | Clears when |
+| Rule | Status |
 |---|---|
-| `test-coverage` | The `Tests` job reports 95% or more for every module and `--cov-fail-under=95` is added so it stays there. Coverage is reported today, not gated. |
-| `entity-unavailable` | Entities whose section failed to read in a partial poll (one to six of the seven endpoints) become unavailable rather than keeping their last value. |
-| `reauthentication-flow` | The reauth step sets the unique id and aborts on a mismatch, so a swapped unit at the same address is refused. |
-| `strict-typing` | The `Tests` job's mypy run, with Home Assistant installed and no relaxations in pyproject, is green. |
-| `discovery`, `discovery-update-info` | The unit's mDNS service type and TXT records have been measured from a LAN host and a zeroconf flow keyed on the serial is implemented. Not guessed. |
+| Every rule at every tier | `done` or `exempt` with a written reason. Nothing is `todo`. |
+| Exemptions | `dependency-transparency` (no external dependency), `docs-conditions` and `docs-triggers` (none provided), `docs-configuration-parameters` (no options), `dynamic-devices` and `stale-devices` (one entry is one KVM). |
 
 A rule is `done` when a test or a CI run shows it, not when the code looks
 right. Written tests that have never run are not coverage, and mypy without
@@ -105,8 +108,9 @@ import nothing from Home Assistant and nothing from each other's neighbours.
    folder.
 4. **`quality_scale.yaml`** moves as-is; the same rules apply and the same
    validator logic exists in core's hassfest.
-5. **Measure discovery** before submitting. A core reviewer will ask why a
-   device with an mDNS responder has no discovery.
+5. **Zeroconf discovery** is already in the manifest and answered by
+   `async_step_zeroconf`. A core submission adds `glkvm` to
+   `homeassistant/generated/zeroconf.py`, which hassfest generates.
 6. Open the PR against `home-assistant/core` with the documentation PR against
    `home-assistant/home-assistant.io`; the README sections here map onto the
    documentation page's required headings (installation, configuration,

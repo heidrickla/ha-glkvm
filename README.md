@@ -120,6 +120,25 @@ Manual: copy `custom_components/glkvm/` into your Home Assistant
 
 Then Settings -> Devices & Services -> Add Integration -> GL.iNet KVM.
 
+### Discovery
+
+Units on the same network as Home Assistant announce themselves over mDNS
+(`_glinet._tcp.local.`) and appear under Settings -> Devices & Services as a
+discovered device. Adding one that way asks only for the login and the
+certificate check; the address and port come from the announcement, and the
+serial the entry is keyed on is read from the unit once the login is
+accepted.
+
+The announcement carries the unit's MAC address, and Home Assistant stores
+it with the entry. That is what lets a unit that changes IP address, on a
+DHCP lease renewal or a move to another subnet, be recognised as the one you
+already have: the entry follows it to the new address instead of offering
+you a second copy of the same KVM. A unit added by hand gets its MAC stored
+at setup, so it is discoverable when it later moves.
+
+If your network does not carry mDNS between Home Assistant and the unit, add
+it by address instead. Nothing else depends on discovery.
+
 ### Installation parameters
 
 | Field | Meaning |
@@ -145,7 +164,10 @@ options beyond these.
 
 When the unit starts refusing the credentials, Home Assistant stops polling
 and asks for them again. It stops rather than retrying because GL.iNet's
-firmware locks the account after repeated failed logins.
+firmware locks the account after repeated failed logins. The new credentials
+are checked against the serial the entry was set up for: if a different KVM
+has been put at that address, the form says so rather than quietly handing
+this entry's device, entities and history to another unit.
 
 ### Removing it
 
@@ -156,9 +178,11 @@ its device and every entity. Nothing is written to the unit.
 
 Every 30 seconds the integration reads the unit's ATX, virtual media, streamer,
 HID, GPIO, health and Wake-on-LAN state, each from its own endpoint. A single
-endpoint failing keeps that section's last value and leaves the rest live;
-only the unit being unreachable marks everything unavailable. The camera
-fetches a frame when something asks for one.
+endpoint failing leaves the rest live and makes only the entities that read
+it unavailable, so a section the unit has stopped answering for shows as
+unavailable rather than as the value it last confirmed. Only the unit being
+unreachable for all seven marks everything unavailable. The camera fetches a
+frame when something asks for one.
 
 Two sets of entities follow the unit between polls. Wake buttons are created
 for targets added on the unit and removed from the entity registry for
@@ -285,8 +309,12 @@ sequence:
 - **Authentication is per request.** The unit accepts the credentials as
   headers on every call; if it has authentication disabled, whatever you enter
   works, which is the correct answer.
-- Nothing is discovered automatically yet. The unit does advertise over mDNS,
-  but its service has not been measured and is not guessed at.
+- **Discovery needs mDNS to reach Home Assistant.** The announcement is
+  filtered on the model, so only Comet KVMs are offered; a unit on a segment
+  that does not forward mDNS has to be added by address. A unit whose entry
+  has no stored MAC yet, because it was added before this version, is offered
+  as a new device until its serial is read, at which point it is recognised
+  and its address updated rather than duplicated.
 
 ## Troubleshooting
 
@@ -295,6 +323,9 @@ sequence:
 | Setup says "Could not reach a KVM at that address" | Home Assistant cannot route to the unit, or the port is wrong. Try the unit's web UI from the Home Assistant host's network. |
 | Setup says the credentials were rejected, and they are right | The unit has locked the account after failed logins. Wait it out, or log in through the unit's web UI. |
 | Everything is unavailable | The unit is unreachable. The log has one line saying so and one when it recovers. |
+| One group of entities is unavailable while the rest are fine | The endpoint behind that group failed on the last poll. Turn on debug logging: the coordinator names each failed section. |
+| The KVM is not discovered | Home Assistant sees mDNS only on networks it is attached to, and the announcement is filtered on the model. Add the unit by address. |
+| A discovered KVM you already have is offered as a new device | Its entry has no stored MAC yet. Adding it anyway is safe: it is recognised by its serial and updates the entry you have. |
 | Camera and capture sensors unavailable, the rest fine | The streamer is not running on the unit. See known limitations. |
 | Virtual media entities unavailable, the rest fine | The mass-storage gadget is offline. See known limitations. |
 | Power entities unavailable, the rest fine | No ATX board is attached to the unit. |
@@ -321,9 +352,10 @@ credentials and every MAC and IP address redacted.
   MAC and IP addresses replaced.
 - `tests/ha/` covers the Home Assistant layer with the client replaced by a
   fake that answers from the same fixtures. The GitHub `Tests` workflow runs
-  it on every push against a pinned Home Assistant release, with coverage
-  reported and mypy in strict mode; it skips where the Home Assistant test
-  harness is absent, which includes Windows.
+  it on every push against a pinned Home Assistant release, with mypy in
+  strict mode and both suites measured into one coverage figure that fails
+  the job under 95%; it skips where the Home Assistant test harness is
+  absent, which includes Windows.
 - `python tools/validate_local.py` is the offline half of the hassfest and
   HACS checks plus every cross-file consistency check, including a scan for
   user-facing exceptions raised without a translation key.
@@ -343,12 +375,15 @@ two stock-firmware limitations above, lives in the `glkvm-firmware` repository.
 ## Quality scale
 
 Built to Home Assistant's Integration Quality Scale, tracked rule by rule in
-[`quality_scale.yaml`](custom_components/glkvm/quality_scale.yaml) with a
-reason on every exemption and on every rule still marked `todo`.
-`tools/validate_local.py` checks the file against the pinned rule list, so a
-rule that is simply missing fails rather than reading as complete. The scale
-is a core-integration concept; a custom integration builds to the rules and
-is not scored.
+[`quality_scale.yaml`](custom_components/glkvm/quality_scale.yaml). All 54
+rules are met; the six that do not apply here are marked `exempt` with the
+reason written out. `tools/validate_local.py` checks the file against the
+pinned rule list, so a rule that is simply missing fails rather than reading
+as complete, and it refuses a rule marked `done` that the rest of the
+repository contradicts. The scale is a core-integration concept; a custom
+integration builds to the rules and is not scored.
+
+Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 Publication status is in [PUBLISHING.md](PUBLISHING.md).
 

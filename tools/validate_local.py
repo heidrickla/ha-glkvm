@@ -296,6 +296,7 @@ def main() -> int:
     # ---------------------------------------------------------- quality scale
     scale_path = os.path.join(COMP, "quality_scale.yaml")
     check(os.path.isfile(scale_path), "quality_scale.yaml is missing")
+    declared: dict[str, Any] = {}
     if os.path.isfile(scale_path):
         try:
             import yaml
@@ -327,6 +328,126 @@ def main() -> int:
                 notes.append(f"quality scale still todo: {', '.join(todo)}")
         except ImportError:
             notes.append("PyYAML not installed - quality_scale.yaml not parsed")
+
+    # ------------------------------------------------- quality scale evidence
+    # A rule filed `done` that the file set contradicts is worse than one
+    # filed `todo`: the todo gets read, the done does not. Each check below is
+    # the smallest fact that would be false if the mechanism were absent.
+    flow_src = read(COMP, "config_flow.py")
+    models_src = read(COMP, "models.py")
+    entity_src = read(COMP, "entity.py")
+    workflows = ""
+    for root in (".github", ".gitea"):
+        folder = os.path.join(ROOT, root, "workflows")
+        if os.path.isdir(folder):
+            for name in sorted(os.listdir(folder)):
+                workflows += read(folder, name)
+
+    def status(rule: str) -> str:
+        value = declared.get(rule)
+        if isinstance(value, dict):
+            return str(value.get("status", ""))
+        return str(value or "")
+
+    def needs(rule: str, condition: bool, message: str) -> None:
+        if status(rule) == "done":
+            check(condition, f"{rule} is done but {message}")
+
+    # Discovery is a manifest key plus the flow step that answers it.
+    discovery_keys = ("zeroconf", "dhcp", "ssdp", "bluetooth", "homekit", "usb")
+    found_discovery = [key for key in discovery_keys if key in manifest]
+    needs(
+        "discovery",
+        bool(found_discovery),
+        "manifest.json declares no discovery method",
+    )
+    for key in found_discovery:
+        needs(
+            "discovery",
+            f"async_step_{key}(" in flow_src,
+            f"manifest declares {key} with no async_step_{key} to answer it",
+        )
+    needs(
+        "discovery-update-info",
+        "_abort_if_unique_id_configured(updates=" in flow_src
+        or "async_update_entry(" in flow_src,
+        "no discovery path updates a configured entry's connection details",
+    )
+    needs(
+        "reauthentication-flow",
+        "async_step_reauth_confirm(" in flow_src
+        and "_abort_if_unique_id_mismatch(" in flow_src,
+        "reauth does not check that the unit answering is still this entry's",
+    )
+    needs(
+        "reconfiguration-flow",
+        "async_step_reconfigure(" in flow_src,
+        "there is no reconfigure step",
+    )
+    needs(
+        "entity-unavailable",
+        "failed:" in models_src and "self.data.failed" in entity_src,
+        "no entity consults the set of sections the last poll failed to read",
+    )
+    needs(
+        "test-coverage",
+        "--cov-fail-under" in workflows,
+        "no workflow gates on a coverage threshold",
+    )
+    needs(
+        "strict-typing",
+        "strict = true" in read(ROOT, "pyproject.toml"),
+        "pyproject.toml does not run mypy in strict mode",
+    )
+    for relaxation in (
+        "disallow_subclassing_any = false",
+        "disallow_untyped_decorators = false",
+        "warn_unused_ignores = false",
+        "disallow_untyped_defs = false",
+        "ignore_errors = true",
+    ):
+        needs(
+            "strict-typing",
+            relaxation not in read(ROOT, "pyproject.toml").split("[[tool.mypy")[0],
+            f"pyproject.toml relaxes mypy with {relaxation}",
+        )
+
+    # --------------------------------------------------- config flow strings
+    # Every step the flow shows, every error it can put on a form and every
+    # reason it aborts with has to have text. A missing one shows the user a
+    # translation key.
+    config_strings = strings.get("config", {})
+    for step in set(re.findall(r'step_id="([a-z_]+)"', flow_src)):
+        check(
+            step in config_strings.get("step", {}),
+            f"config flow shows step {step!r} with no strings.json entry",
+        )
+    for step in config_strings.get("step", {}):
+        check(
+            f"async_step_{step}(" in flow_src,
+            f"strings.json describes step {step!r} that the flow does not have",
+        )
+    for error in set(re.findall(r'\{"base": "([a-z_]+)"\}', flow_src)):
+        check(
+            error in config_strings.get("error", {}),
+            f"config flow returns error {error!r} with no strings.json entry",
+        )
+    # The three Home Assistant raises itself, whatever the flow says.
+    abort_reasons = set(re.findall(r'reason="([a-z_]+)"', flow_src)) | {
+        "already_configured",
+        "reconfigure_successful",
+        "reauth_successful",
+    }
+    for reason in abort_reasons:
+        check(
+            reason in config_strings.get("abort", {}),
+            f"config flow aborts with {reason!r} with no strings.json entry",
+        )
+    for reason in config_strings.get("abort", {}):
+        check(
+            reason in abort_reasons,
+            f"strings.json declares unused abort reason {reason!r}",
+        )
 
     # ------------------------------------------------------ icon translations
     # Every translation key an entity uses needs an icon and a name, and every

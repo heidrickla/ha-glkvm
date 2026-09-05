@@ -29,9 +29,12 @@ rules:
       mappings each followed by a retry that reaches CREATE_ENTRY, the
       duplicate abort (which refreshes the moved unit's address, port and
       credentials), the no-serial fallback, reconfigure with its
-      another_device guard and its error-then-recovery path, and reauth in
-      both outcomes including recovery from a wrong password. Every form
-      that can show an error is checked not to echo the password. Run by
+      another_device guard and its error-then-recovery path, reauth in
+      every outcome including recovery from a wrong password and the refusal
+      of a different unit, and zeroconf in all four: a new unit confirmed to
+      CREATE_ENTRY, a wrong password recovered from, a known unit followed to
+      a new address, and an announcement with no readable MAC aborted. Every
+      form that can show an error is checked not to echo the password. Run by
       the GitHub Tests workflow on every push.
   config-flow: done
   dependency-transparency:
@@ -78,7 +81,9 @@ rules:
       The unit's serial number is the unique id, so a moved unit is not added
       twice; re-adding it updates the stored address, port and credentials.
       A unit that reports no serial falls back to its address, which still
-      keeps one entry per unit. Both paths are tested.
+      keeps one entry per unit. A discovered unit is matched on its MAC
+      before its serial can be read, for the same reason. Every path is
+      tested.
 
   # Silver
   action-exceptions:
@@ -97,14 +102,17 @@ rules:
       reconfigure flow, and documented as installation parameters.
   docs-installation-parameters: done
   entity-unavailable:
-    status: todo
+    status: done
     comment: |
-      Coordinator failure marks everything unavailable, and ATX, media and
-      capture entities are unavailable in the states the unit reports. Not
-      yet: a partial poll (one to six of the seven endpoints failing, or a
-      500 on one) keeps that section's last value, so its entities show
-      stale state rather than unavailable. Track per-section failure and
-      fold it into available_fn.
+      Coordinator failure marks everything unavailable, and a partial poll
+      marks the sections that failed: every entity carries the section it
+      reads and is unavailable while that section is in KvmData.failed, so a
+      timeout or a 500 on one of the seven endpoints shows as unavailable
+      rather than as the last value the unit confirmed. ATX, media and
+      capture entities are unavailable in the states the unit reports as
+      well. tests/ha/test_partial_polls.py drives each of the seven sections
+      through both failures and checks that its entities, and only its
+      entities, go unavailable and then return with a real value.
   integration-owner: done
   log-when-unavailable:
     status: done
@@ -113,37 +121,49 @@ rules:
       fails and once at info when it recovers.
   parallel-updates: done
   reauthentication-flow:
-    status: todo
+    status: done
     comment: |
       A 401 on any poll raises ConfigEntryAuthFailed and starts reauth, which
       stops polling and keeps the integration out of GL.iNet's failed-login
-      lockout. Not yet: the reauth step does not set the unique id and abort
-      on a mismatch, so a different unit answering at the stored address
-      would be accepted. Add async_set_unique_id plus
-      _abort_if_unique_id_mismatch to async_step_reauth_confirm.
+      lockout. The step reads the serial of whatever answered, sets it as the
+      unique id and aborts on a mismatch, so a different KVM at the stored
+      address is refused rather than adopted along with this entry's device
+      and history. Recovery from a wrong password and the refusal of another
+      unit are both tested.
   test-coverage:
-    status: todo
+    status: done
     comment: |
-      The GitHub Tests workflow runs the pure suite and tests/ha with
-      --cov=custom_components/glkvm on every push and reports per-module
-      coverage. It is not yet gated at 95%: the partial-poll branches in
-      coordinator.py and a few availability branches are known to be
-      uncovered. Add tests for those, then --cov-fail-under=95.
+      The GitHub Tests workflow measures both suites into one coverage file
+      on every push and fails the job under 95%
+      (--cov=custom_components/glkvm --cov-append --cov-fail-under=95). Both,
+      because api.py and models.py are executed only by the pure suite: the
+      Home Assistant layer replaces the client with a fake, so gating on that
+      run alone would gate on half the component.
 
   # Gold
   devices: done
   diagnostics: done
   discovery:
-    status: todo
+    status: done
     comment: |
-      The unit runs an mDNS responder (GL.iNet's gl_mdns / mdnsd), but the
-      service type and TXT records have not been measured from a LAN vantage
-      point, and the serial that would key the discovered entry is behind
-      authentication on stock firmware. Implement once measured; do not
-      guess a service type.
+      Zeroconf. Measured from a LAN host on 2026-09-04: the units announce
+      _glinet._tcp.local. on 443 with TXT mn=rm10, v=<firmware>, devid and
+      mac=<base64 of the twelve hex digits>. The manifest filters on mn, so
+      only a Comet KVM reaches the flow. The serial an entry is keyed on is
+      behind authentication and is in neither the TXT records nor
+      /api/info's reach, so the confirm step asks for the login, reads the
+      serial and creates the entry keyed on it.
   discovery-update-info:
-    status: todo
-    comment: Follows discovery.
+    status: done
+    comment: |
+      The MAC is the only key the announcement and the unit's own API share
+      (GET /api/system/get_network_config, result.config.mac_address), so it
+      is stored in entry data by the user, reconfigure and discovery flows
+      and refreshed at every setup. A discovered MAC that matches a
+      configured entry updates that entry's host and reloads it rather than
+      offering the unit twice; an entry from before the MAC was stored is
+      still recognised by its serial in the confirm step, which updates its
+      host too. Both paths are tested.
   docs-data-update: done
   docs-examples:
     status: done
@@ -212,12 +232,13 @@ rules:
       with the entry's verify_ssl. Authentication is per-request headers, so
       there is no cookie jar that would need isolating.
   strict-typing:
-    status: todo
+    status: done
     comment: |
-      pyproject.toml runs mypy with strict = true and no relaxations; the
-      three that used to be off (disallow_subclassing_any,
-      disallow_untyped_decorators, warn_unused_ignores) are gone, and the
-      type-ignore they hid is removed. Done once the GitHub Tests job's mypy
-      run with Home Assistant installed is green on this configuration; a
-      local run without Home Assistant sees every HA class as Any and is not
-      the check.
+      pyproject.toml runs mypy with strict = true and no relaxations, plus
+      warn_unreachable, local_partial_types and no_implicit_optional, the
+      three core's own mypy.ini adds for an integration in .strict-typing.
+      Only the import codes core disables are disabled. The GitHub Tests job
+      runs that configuration with Home Assistant installed on every push,
+      which is the run that means anything: without Home Assistant every
+      class it exports is Any and a local run cannot see a subclassing or
+      decorator defect.
