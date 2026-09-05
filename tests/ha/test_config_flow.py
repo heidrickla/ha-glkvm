@@ -1,25 +1,34 @@
-"""The config flow: setup and its failures, the duplicate guard, reconfigure, reauth.
+"""The config flow: setup and its failures, discovery, reconfigure, reauth.
 
 Every step that can show an error is also driven past it: the unit comes
 back, the same flow is resubmitted, and it ends where it should.
 """
 
 from dataclasses import replace
+from ipaddress import ip_address
 
 import pytest
 import voluptuous as vol
-from homeassistant.config_entries import SOURCE_USER
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
+from homeassistant.config_entries import SOURCE_USER, SOURCE_ZEROCONF
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_MAC,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_USERNAME,
+)
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from custom_components.glkvm.api import (
     GlkvmAuthError,
     GlkvmConnectionError,
     GlkvmResponseError,
 )
+from custom_components.glkvm.config_flow import mac_from_txt, normalise_mac
 from custom_components.glkvm.const import DOMAIN
 
-from .conftest import ENTRY_DATA, HOST, SERIAL
+from .conftest import ENTRY_DATA, HOST, SERIAL, UNIT_MAC, UNIT_MAC_TXT
 
 
 def _field(schema, name):
@@ -48,6 +57,20 @@ async def test_user_step_creates_the_entry_keyed_on_the_serial(hass, fake_client
     assert result["result"].unique_id == SERIAL
     # GL.iNet's hostname, not kvmd's localhost.localdomain.
     assert result["title"] == "GL-RM10-Example"
+    # The unit's own MAC is stored beside the serial: it is what a zeroconf
+    # announcement can be matched against, and the serial is not in one.
+    assert result["data"][CONF_MAC] == UNIT_MAC
+
+
+async def test_a_unit_that_will_not_say_its_mac_is_still_added(hass, fake_client):
+    # A firmware without the endpoint, or one that errors on it, only costs
+    # the entry its discovery key.
+    fake_client.network = None
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}, data=dict(ENTRY_DATA)
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert CONF_MAC not in result["data"]
 
 
 async def test_title_falls_back_to_the_address(hass, fake_client):
@@ -132,6 +155,139 @@ async def test_the_same_unit_at_a_new_address_updates_the_existing_entry(
     assert config_entry.data[CONF_PORT] == 8443
     assert config_entry.data[CONF_PASSWORD] == "rotated"
     # The update schedules a reload; let it finish inside the test.
+    await hass.async_block_till_done()
+
+
+# ----------------------------------------------------------------- zeroconf
+
+
+def _announcement(host: str = "192.0.2.30", mac: str = UNIT_MAC_TXT, **properties):
+    """What the unit puts on the wire, as Home Assistant hands it to the flow.
+
+    Measured from a GL-RM10 on the LAN: `_glinet._tcp.local.` on 443, TXT
+    `mn`, `v`, `devid` and `mac`, the MAC base64-encoded, instance name
+    GL-RM10-<last three hex of the MAC>.
+    """
+    txt = {"mn": "rm10", "v": "1.10.0", "devid": "abcdef", "mac": mac, **properties}
+    return ZeroconfServiceInfo(
+        ip_address=ip_address(host),
+        ip_addresses=[ip_address(host)],
+        port=443,
+        hostname="GL-RM10-215.local.",
+        type="_glinet._tcp.local.",
+        name="GL-RM10-215._glinet._tcp.local.",
+        properties={key: value for key, value in txt.items() if value is not None},
+    )
+
+
+async def _discover(hass, info=None):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_ZEROCONF}, data=info or _announcement()
+    )
+
+
+def test_the_txt_mac_is_base64_of_the_twelve_hex_digits():
+    assert mac_from_txt(UNIT_MAC_TXT) == UNIT_MAC
+    # Not base64, base64 of the wrong length, and not a string at all.
+    assert mac_from_txt("not base64!") is None
+    assert mac_from_txt("YWJj") is None
+    assert mac_from_txt(None) is None
+    assert mac_from_txt("") is None
+    # Whatever separated the digits, and whatever case they came in.
+    assert normalise_mac("94-83-C4-00-02-15") == UNIT_MAC
+    assert normalise_mac("9483c4000215") == UNIT_MAC
+    assert normalise_mac("94:83:c4:00:02:1") is None
+    assert normalise_mac("zz:83:c4:00:02:15") is None
+    assert normalise_mac(None) is None
+
+
+async def test_a_discovered_unit_asks_for_its_login_and_is_added(hass, fake_client):
+    result = await _discover(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "zeroconf_confirm"
+    assert result["description_placeholders"] == {"host": "192.0.2.30"}
+    _password_is_not_echoed(result)
+
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "secret"}
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    # The address and port came from the announcement; the serial, which the
+    # announcement cannot carry, came from the unit once it was authenticated.
+    assert done["result"].unique_id == SERIAL
+    assert done["data"][CONF_HOST] == "192.0.2.30"
+    assert done["data"][CONF_PORT] == 443
+    assert done["data"][CONF_MAC] == UNIT_MAC
+
+
+async def test_a_discovered_unit_that_refuses_the_login_recovers(hass, fake_client):
+    result = await _discover(hass)
+    fake_client.fail = GlkvmAuthError("no")
+    shown = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "wrong"}
+    )
+    assert shown["type"] is FlowResultType.FORM
+    assert shown["errors"] == {"base": "invalid_auth"}
+    _password_is_not_echoed(shown)
+
+    fake_client.fail = None
+    done = await hass.config_entries.flow.async_configure(
+        shown["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "right"}
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert done["data"][CONF_PASSWORD] == "right"
+
+
+async def test_an_announcement_with_no_readable_mac_is_dropped(hass, fake_client):
+    result = await _discover(hass, _announcement(mac=None))
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_mac"
+
+
+async def test_a_known_unit_that_moved_is_followed_to_its_new_address(
+    hass, fake_client, config_entry
+):
+    # discovery-update-info: the entry keeps its identity and its history and
+    # is polled at the address the unit is answering on now.
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        config_entry, data={**config_entry.data, CONF_MAC: UNIT_MAC}
+    )
+    result = await _discover(hass)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == "192.0.2.30"
+    await hass.async_block_till_done()
+
+
+async def test_a_known_unit_at_the_address_it_already_has_changes_nothing(
+    hass, fake_client, config_entry
+):
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        config_entry, data={**config_entry.data, CONF_MAC: UNIT_MAC.upper()}
+    )
+    result = await _discover(hass, _announcement(host=HOST))
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == HOST
+
+
+async def test_an_entry_added_before_the_mac_was_stored_is_still_recognised(
+    hass, fake_client, config_entry
+):
+    # No stored MAC to match on, so the unit looks new until the confirm step
+    # reads its serial; that is what stops a second entry for the same KVM.
+    config_entry.add_to_hass(hass)
+    result = await _discover(hass)
+    assert result["type"] is FlowResultType.FORM
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "secret"}
+    )
+    assert done["type"] is FlowResultType.ABORT
+    assert done["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == "192.0.2.30"
+    assert config_entry.data[CONF_MAC] == UNIT_MAC
     await hass.async_block_till_done()
 
 
@@ -265,4 +421,36 @@ async def test_reauth_with_a_still_wrong_password_stays_on_the_form_then_recover
     assert done["type"] is FlowResultType.ABORT
     assert done["reason"] == "reauth_successful"
     assert config_entry.data[CONF_PASSWORD] == "right"
+    await hass.async_block_till_done()
+
+
+async def test_reauth_refuses_a_different_unit_at_the_same_address(
+    hass, fake_client, config_entry
+):
+    # A KVM swapped in at the stored address will accept its own login. Taking
+    # it would hand this entry's device, entities and history to another unit.
+    config_entry.add_to_hass(hass)
+    result = await config_entry.start_reauth_flow(hass)
+    fake_client.system = replace(fake_client.system, serial="FFFFFFFFFFFFFFFF")
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "other"}
+    )
+    assert done["type"] is FlowResultType.ABORT
+    assert done["reason"] == "another_device"
+    assert config_entry.data[CONF_PASSWORD] == ENTRY_DATA[CONF_PASSWORD]
+
+
+async def test_reauth_survives_a_unit_that_will_not_say_its_mac(
+    hass, fake_client, config_entry
+):
+    config_entry.add_to_hass(hass)
+    fake_client.read_fail["network"] = GlkvmResponseError(500, "Error", "boom")
+    result = await config_entry.start_reauth_flow(hass)
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "reauthed"}
+    )
+    assert done["type"] is FlowResultType.ABORT
+    assert done["reason"] == "reauth_successful"
+    assert config_entry.data[CONF_PASSWORD] == "reauthed"
+    assert CONF_MAC not in config_entry.data
     await hass.async_block_till_done()

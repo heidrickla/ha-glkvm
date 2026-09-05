@@ -1,5 +1,6 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "GL.iNet KVM",
@@ -14,6 +15,20 @@
         "data_description": {
           "host": "The KVM's LAN address. Use the IP address rather than a .local name if you have more than one unit.",
           "port": "443 unless you have moved the web interface.",
+          "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
+          "password": "The KVM's password. Leave empty if the unit has authentication disabled.",
+          "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "GL.iNet KVM",
+        "description": "A GL.iNet KVM was found at {host}. Enter its login to add it.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify the KVM's certificate"
+        },
+        "data_description": {
           "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
           "password": "The KVM's password. Leave empty if the unit has authentication disabled.",
           "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
@@ -58,6 +73,7 @@
     "abort": {
       "already_configured": "This KVM is already configured.",
       "another_device": "That address answers as a different KVM than this entry was set up for.",
+      "no_mac": "The KVM's mDNS announcement carried no readable MAC address, so it cannot be matched to a configured unit. Add it by address instead.",
       "reconfigure_successful": "The KVM was reconfigured.",
       "reauth_successful": "Re-authentication was successful."
     }
