@@ -44,19 +44,28 @@ asyncio_mode = "auto"
 # source before it reaches this integration.
 python_version = "3.14"
 strict = true
-warn_return_any = true
-disallow_untyped_defs = true
-disallow_any_generics = true
-no_implicit_reexport = true
-# Home Assistant is not installed on every machine this is linted from, and the
-# client layer is deliberately importable without it. Missing HA stubs must not
-# be reported as errors in the integration's own code.
-ignore_missing_imports = true
+# The three flags core's own mypy.ini adds on top of `strict` for an
+# integration listed in .strict-typing. Everything else in that block -
+# warn_return_any, disallow_untyped_defs, disallow_any_generics,
+# disallow_subclassing_any, disallow_untyped_calls, disallow_untyped_decorators,
+# disallow_incomplete_defs, check_untyped_defs - is already inside `strict`,
+# and naming those again here would only invite switching one off.
+warn_unreachable = true
+local_partial_types = true
+no_implicit_optional = true
+# Exactly the codes core disables, for the same reason: an import mypy cannot
+# resolve is not a typing defect in this code. Home Assistant is not installed
+# on every machine this is linted from, and the client layer is deliberately
+# importable without it. Narrower than ignore_missing_imports, which silenced
+# any resolution problem at all.
+disable_error_code = ["annotation-unchecked", "import-not-found", "import-untyped"]
+# Home Assistant's own source is followed for the types it exports, with its
+# internal errors left to core. Nothing in this integration is relaxed.
 follow_imports = "silent"
-# Nothing else is relaxed. Without Home Assistant installed every class it
-# exports is Any, so a local run reports subclassing Any and untyped
-# decorators; that run is not the check. The GitHub Tests job runs this
-# configuration with Home Assistant installed, and that run is.
+# Without Home Assistant installed every class it exports is Any, so a local
+# run cannot see a subclassing or decorator defect; that run is not the check.
+# The GitHub Tests job runs this configuration with Home Assistant installed,
+# and that run is.
 
 [[tool.mypy.overrides]]
 module = "tests.*"
