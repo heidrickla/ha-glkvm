@@ -7,7 +7,7 @@ NAME = "GL.iNet KVM"
 MANUFACTURER = "GL.iNet"
 
 # Must match manifest.json; tools/validate_local.py refuses a mismatch.
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 # The kvmd API is served over HTTPS with a self-signed certificate (CN
 # "localhost", issued by "GLKVM"), so verification is off by default. A user

@@ -6,7 +6,7 @@ numbers are the ones in `manifest.json`. Changes that only move code around,
 or that touch tests and CI, are not listed unless they change what the
 integration does.
 
-## [Unreleased] - 2026-09-04
+## [0.2.0] - 2026-09-05
 
 ### Added
 

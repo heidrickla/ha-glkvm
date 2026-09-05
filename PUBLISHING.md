@@ -9,7 +9,7 @@ core. The code is built for both from the first commit; neither is submitted.
 |---|---|
 | Public GitHub repository | Done: `heidrickla/ha-glkvm`, issues on, topics set. |
 | HACS and hassfest actions green | Done on `main`; both run on every push. |
-| Release after green | `v0.1.0`, created on `b030256`. Everything since is unreleased; `CHANGELOG.md` lists it. |
+| Release after green | `v0.2.0`, created on the green head that carries discovery, MAC-following and the per-section unavailability. `v0.1.0` was created on `b030256`. Nothing is unreleased; `CHANGELOG.md` lists both. |
 | `hacs/default` pull request | **Not opened.** The branch is staged on the `heidrickla/default` fork; see below. |
 | Forge (`gitea`) copy | **Behind GitHub.** Pushes go to `origin` only while the shared runner is busy; one catch-up push when it is quiet. |
 
@@ -21,7 +21,7 @@ Open it from the fork against `hacs/default` `master`, titled
 every box ticked and the three links. Current links come from:
 
 ```bash
-gh release view v0.1.0 --repo heidrickla/ha-glkvm --json url --jq .url
+gh release view v0.2.0 --repo heidrickla/ha-glkvm --json url --jq .url
 gh run list --repo heidrickla/ha-glkvm --workflow Validate --branch main --limit 1 --json databaseId,conclusion
 ```
 

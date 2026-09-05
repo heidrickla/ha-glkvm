@@ -1,6 +1,6 @@
 [project]
 name = "ha-glkvm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Home Assistant integration for GL.iNet Comet KVMs."
 requires-python = ">=3.12"
 
