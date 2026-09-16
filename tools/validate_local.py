@@ -506,8 +506,8 @@ def main() -> int:
         keys[:2] == ["domain", "name"] and keys[2:] == sorted(keys[2:]),
         "manifest keys must be domain, name, then alphabetical (hassfest MANIFEST)",
     )
-    # HACS serves both links to strangers. A forge or LAN URL here passes
-    # every other check and gives a user a page they cannot open.
+    # HACS serves both links to strangers. A development or LAN URL here
+    # passes every other check and gives a user a page they cannot open.
     for key in ("documentation", "issue_tracker"):
         url = manifest.get(key)
         host = unreachable_host(url) if isinstance(url, str) else None

@@ -5,9 +5,8 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Gitea's act_runner also picks up .github/workflows, so every job here is
-# gated to GitHub. On the gitea forge these skip instantly and
-# .gitea/workflows/validate.yml is the one that runs.
+# Gitea reads .github/workflows too, so every job here is gated to github.com.
+# Elsewhere they skip instantly and .gitea/workflows/validate.yml is what runs.
 
 jobs:
   tests:

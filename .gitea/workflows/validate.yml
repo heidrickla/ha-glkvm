@@ -1,7 +1,8 @@
 name: Validate
 
-# The runner is small, so the jobs that install Home Assistant are
-# workflow_dispatch only and an ordinary push runs the lint job alone.
+# The jobs that install Home Assistant are workflow_dispatch only. An ordinary
+# push runs the lint job alone. .github/workflows/tests.yml runs the same two
+# suites on every push.
 
 on:
   push:
@@ -27,10 +28,10 @@ jobs:
           python3 -m ruff check .
           python3 -m ruff format --check .
 
-      # No ast.parse step here on purpose. The runner image ships Python
+      # No ast.parse step here on purpose. The default python3 in this job is
       # 3.10.12 and this integration uses PEP 695 `type X = ...`, which that
       # interpreter cannot parse. Ruff already parses every file at py313, and
-      # tools/validate_local.py runs in the 3.13 job below.
+      # tools/validate_local.py runs in the job below.
       - name: JSON is valid
         run: |
           for f in custom_components/glkvm/*.json custom_components/glkvm/translations/*.json hacs.json; do
@@ -84,18 +85,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The runner image ships 3.10. Home Assistant 2026.x needs 3.14: with
-      # 3.13 here, pip silently resolves the newest test package that still
-      # supports 3.13, which is an old Home Assistant, and a pinned current
-      # one cannot be found at all.
+      # The default python3 in this job is 3.10. Home Assistant 2026.x needs
+      # 3.14: with 3.13 here, pip silently resolves the newest test package
+      # that still supports 3.13, which is an old Home Assistant, and a pinned
+      # current one cannot be found at all.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
 
       # Two virtual environments, so the job neither inherits nor leaves
-      # anything in the runner's shared Python toolcache. A stale aiodns in
-      # that cache, too old for the pycares beside it, made `import aiohttp`
-      # fail before one test ran.
+      # anything in the setup-python toolcache. A stale aiodns in that cache,
+      # too old for the pycares beside it, made `import aiohttp` fail before
+      # one test ran.
       #
       # pytest-homeassistant-custom-component pins Home Assistant exactly;
       # 0.13.357 is Home Assistant 2026.8.3, the version this was verified on.
