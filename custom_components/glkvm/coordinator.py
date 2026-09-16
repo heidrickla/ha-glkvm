@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
+from typing import TypeVar, override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC
@@ -99,6 +99,7 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             configuration_url=self.client.base_url,
         )
 
+    @override
     async def _async_setup(self) -> None:
         """One-time identity reads, so device_info is complete from first load."""
         try:
@@ -142,6 +143,7 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
                 self._entry, data={**self._entry.data, CONF_MAC: mac}
             )
 
+    @override
     async def _async_update_data(self) -> KvmData:
         previous = self.data or KvmData()
         auth_failures: list[str] = []

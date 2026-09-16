@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.const import EntityCategory
@@ -56,16 +56,20 @@ class GlkvmHostPowerSwitch(GlkvmEntity, SwitchEntity):
         super().__init__(coordinator, "host_power", section=SECTION_ATX)
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.data.atx is not None and self.data.atx.enabled
 
     @property
+    @override
     def is_on(self) -> bool | None:
         return self.data.atx.power_on if self.data.atx else None
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.atx_power("on"))
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.atx_power("off"))
 
@@ -80,20 +84,24 @@ class GlkvmVirtualMediaSwitch(GlkvmEntity, SwitchEntity):
         super().__init__(coordinator, "virtual_media", section=SECTION_MSD)
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.data.msd is not None and self.data.msd.online
 
     @property
+    @override
     def is_on(self) -> bool | None:
         return self.data.msd.connected if self.data.msd else None
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         msd = self.data.msd
         if msd is None:
             return {}
         return {"image": msd.image, "cdrom": msd.cdrom, "read_write": msd.rw}
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.data.msd is None or self.data.msd.image is None:
             # kvmd would answer with an opaque error; say what is missing. The
@@ -103,6 +111,7 @@ class GlkvmVirtualMediaSwitch(GlkvmEntity, SwitchEntity):
             )
         await self._run(self.coordinator.client.msd_set_connected(True))
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.msd_set_connected(False))
 
@@ -122,6 +131,7 @@ class GlkvmJigglerSwitch(GlkvmEntity, SwitchEntity):
         super().__init__(coordinator, "mouse_jiggler", section=SECTION_HID)
 
     @property
+    @override
     def available(self) -> bool:
         hid = self.data.hid
         return (
@@ -132,12 +142,15 @@ class GlkvmJigglerSwitch(GlkvmEntity, SwitchEntity):
         )
 
     @property
+    @override
     def is_on(self) -> bool | None:
         return self.data.hid.jiggler_active if self.data.hid else None
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.hid_set_jiggler(True))
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.hid_set_jiggler(False))
 
@@ -162,17 +175,21 @@ class GlkvmGpioSwitch(GlkvmEntity, SwitchEntity):
         )
 
     @property
+    @override
     def available(self) -> bool:
         current = self._current()
         return super().available and current is not None and current.online is not False
 
     @property
+    @override
     def is_on(self) -> bool | None:
         current = self._current()
         return current.state if current else None
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.gpio_switch(self._channel, True))
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._run(self.coordinator.client.gpio_switch(self._channel, False))

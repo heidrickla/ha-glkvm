@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.button import (
     ButtonDeviceClass,
@@ -145,9 +146,11 @@ class GlkvmButton(GlkvmEntity, ButtonEntity):
         self.entity_description = description
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.entity_description.available_fn(self.data)
 
+    @override
     async def async_press(self) -> None:
         await self._run(self.entity_description.press_fn(self.coordinator.client))
 
@@ -165,6 +168,7 @@ class GlkvmGpioPulseButton(GlkvmEntity, ButtonEntity):
         self._attr_translation_placeholders = {"channel": channel.channel}
 
     @property
+    @override
     def available(self) -> bool:
         if not super().available or self.data.gpio is None:
             return False
@@ -173,6 +177,7 @@ class GlkvmGpioPulseButton(GlkvmEntity, ButtonEntity):
         )
         return current is not None and current.online is not False
 
+    @override
     async def async_press(self) -> None:
         await self._run(self.coordinator.client.gpio_pulse(self._channel))
 
@@ -188,9 +193,11 @@ class GlkvmWakeButton(GlkvmEntity, ButtonEntity):
         self._attr_translation_placeholders = {"target": target.name}
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, str | None]:
         target = next((t for t in self.data.wol if t.mac == self._mac), None)
         return {"mac": self._mac, "ip": target.ip if target else None}
 
+    @override
     async def async_press(self) -> None:
         await self._run(self.coordinator.client.wol_wake(self._mac))

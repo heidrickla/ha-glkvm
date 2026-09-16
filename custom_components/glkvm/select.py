@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import override
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -43,19 +45,23 @@ class GlkvmImageSelect(GlkvmEntity, SelectEntity):
         super().__init__(coordinator, "virtual_media_image", section=SECTION_MSD)
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.data.msd is not None and self.data.msd.online
 
     @property
+    @override
     def options(self) -> list[str]:
         if self.data.msd is None:
             return []
         return [img.name for img in self.data.msd.images if img.complete]
 
     @property
+    @override
     def current_option(self) -> str | None:
         return self.data.msd.image if self.data.msd else None
 
+    @override
     async def async_select_option(self, option: str) -> None:
         # The user asked for something the unit's state forbids: a validation
         # error, not a failure of the unit.
@@ -76,16 +82,20 @@ class GlkvmMouseOutputSelect(GlkvmEntity, SelectEntity):
         super().__init__(coordinator, "mouse_output", section=SECTION_HID)
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.data.hid is not None and self.data.hid.enabled
 
     @property
+    @override
     def options(self) -> list[str]:
         return list(self.data.hid.mouse_outputs) if self.data.hid else []
 
     @property
+    @override
     def current_option(self) -> str | None:
         return self.data.hid.mouse_output if self.data.hid else None
 
+    @override
     async def async_select_option(self, option: str) -> None:
         await self._run(self.coordinator.client.hid_set_mouse_output(option))

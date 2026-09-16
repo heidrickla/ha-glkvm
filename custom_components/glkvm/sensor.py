@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -240,9 +241,11 @@ class GlkvmSensor(GlkvmEntity, SensorEntity):
         self.entity_description = description
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.entity_description.available_fn(self.data)
 
     @property
+    @override
     def native_value(self) -> StateType:
         return self.entity_description.value_fn(self.data)

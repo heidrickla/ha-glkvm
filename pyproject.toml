@@ -40,38 +40,51 @@ addopts = "-q -p tests.winposix"
 asyncio_mode = "auto"
 
 # `strict-typing` is the Platinum rule with teeth: Home Assistant runs mypy in
-# strict mode over integrations that claim it. The settings below mirror the
-# strict block core applies to a strict-typed integration.
+# strict mode over integrations that claim it.
+#
+# Home Assistant core's generated mypy.ini [mypy] block (2026.8.3), plus
+# `strict`, which covers the flags core lists individually. Dropped from core's
+# block: plugins, native_parser and num_workers, which are core-tree settings,
+# and warn_incomplete_stub, because core type-checks its own stubs.
+#
+# python_version is pinned because Home Assistant 2026.x is written for 3.14;
+# a lower target makes mypy stop at Home Assistant's own source before it
+# reaches this integration. platform is pinned so a Windows workstation run and
+# the Linux CI run resolve the same platform branches.
+#
+# disable_error_code carries core's exact three codes rather than
+# ignore_missing_imports: an import mypy cannot resolve is not a typing defect
+# in this code, and the blanket flag cannot tell those two conditions from any
+# other resolution failure. The client layer is deliberately importable without
+# Home Assistant.
 [tool.mypy]
-# Home Assistant 2026.x is written for 3.14 (parenthesis-free except
-# expressions and the like); a lower target makes mypy stop at HA's own
-# source before it reaches this integration.
 python_version = "3.14"
+platform = "linux"
 strict = true
-# The three flags core's own mypy.ini adds on top of `strict` for an
-# integration listed in .strict-typing. Everything else in that block -
-# warn_return_any, disallow_untyped_defs, disallow_any_generics,
-# disallow_subclassing_any, disallow_untyped_calls, disallow_untyped_decorators,
-# disallow_incomplete_defs, check_untyped_defs - is already inside `strict`,
-# and naming those again here would only invite switching one off.
-warn_unreachable = true
 local_partial_types = true
 no_implicit_optional = true
-# Exactly the codes core disables, for the same reason: an import mypy cannot
-# resolve is not a typing defect in this code. Home Assistant is not installed
-# on every machine this is linted from, and the client layer is deliberately
-# importable without it. Narrower than ignore_missing_imports, which silenced
-# any resolution problem at all.
+strict_bytes = true
+warn_unreachable = true
+extra_checks = false
+enable_error_code = [
+    "deprecated",
+    "explicit-override",
+    "ignore-without-code",
+    "redundant-self",
+    "truthy-iterable",
+]
 disable_error_code = ["annotation-unchecked", "import-not-found", "import-untyped"]
-# Home Assistant's own source is followed for the types it exports, with its
-# internal errors left to core. Nothing in this integration is relaxed.
-follow_imports = "silent"
-# Without Home Assistant installed every class it exports is Any, so a local
-# run cannot see a subclassing or decorator defect; that run is not the check.
-# The GitHub Tests job runs this configuration with Home Assistant installed,
-# and that run is.
+follow_imports = "normal"
+show_error_codes = true
 
+# The tests are not the integration; CI checks custom_components/glkvm and
+# never reaches here. `strict = false` does not belong in this section: mypy
+# does not support `strict` per module, accepts the file without a warning and
+# discards the whole section, taking the relaxations beside it with it.
 [[tool.mypy.overrides]]
 module = "tests.*"
-strict = false
 disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+disallow_any_generics = false
+warn_return_any = false

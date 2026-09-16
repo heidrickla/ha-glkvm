@@ -6,7 +6,7 @@ import base64
 import logging
 import string
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, override
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
@@ -180,6 +180,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
             return {"base": "unknown"}, None, None, None
         return {}, unique_id, title, mac
 
+    @override
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -202,6 +203,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    @override
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:

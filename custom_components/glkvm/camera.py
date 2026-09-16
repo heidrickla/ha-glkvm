@@ -15,6 +15,7 @@ override.yaml keeps it running, and a repair issue says so when it is not.
 from __future__ import annotations
 
 import logging
+from typing import override
 
 from homeassistant.components.camera import Camera
 from homeassistant.core import HomeAssistant
@@ -53,19 +54,23 @@ class GlkvmScreenCamera(GlkvmEntity, Camera):
         Camera.__init__(self)
 
     @property
+    @override
     def available(self) -> bool:
         streamer = self.data.streamer
         return super().available and streamer is not None and streamer.running
 
     @property
+    @override
     def brand(self) -> str:
         return MANUFACTURER
 
     @property
+    @override
     def model(self) -> str | None:
         firmware = self.coordinator.firmware
         return firmware.model if firmware else None
 
+    @override
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:

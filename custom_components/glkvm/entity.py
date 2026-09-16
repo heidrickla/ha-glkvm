@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from typing import NoReturn
+from typing import NoReturn, override
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -56,6 +56,7 @@ class GlkvmEntity(CoordinatorEntity[GlkvmCoordinator]):
         return data
 
     @property
+    @override
     def available(self) -> bool:
         """False while the section this entity reads is failing.
 

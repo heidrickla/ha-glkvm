@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -101,10 +102,12 @@ class GlkvmBinarySensor(GlkvmEntity, BinarySensorEntity):
         self.entity_description = description
 
     @property
+    @override
     def available(self) -> bool:
         return super().available and self.entity_description.available_fn(self.data)
 
     @property
+    @override
     def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self.data)
 
@@ -129,11 +132,13 @@ class GlkvmGpioInput(GlkvmEntity, BinarySensorEntity):
         )
 
     @property
+    @override
     def available(self) -> bool:
         current = self._current()
         return super().available and current is not None and current.online is not False
 
     @property
+    @override
     def is_on(self) -> bool | None:
         current = self._current()
         return current.state if current else None
