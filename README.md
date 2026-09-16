@@ -1,10 +1,10 @@
 # GL.iNet KVM for Home Assistant
 
-Local (no cloud) Home Assistant integration for **GL.iNet Comet KVM-over-IP
-units**: the host's power, its screen, the virtual USB drive, the keyboard
+Local (no cloud) Home Assistant integration for GL.iNet Comet KVM-over-IP
+units: the host's power, its screen, the virtual USB drive, the keyboard
 and mouse gadget, Wake-on-LAN, and the KVM's own health, all as entities on
-one device. Built and verified against a **GL-RM10 (Comet Pro)** on firmware
-1.10.0; everything talks to the unit over your LAN through the same API its
+one device. Built and verified against a GL-RM10 (Comet Pro) on firmware
+1.10.0. Everything talks to the unit over your LAN through the same API its
 own web interface uses.
 
 ## What you get
@@ -82,26 +82,6 @@ a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the
 ATX board's power reading, the firmware version and hostname endpoints, the
 Wake-on-LAN list), and degrades where they are absent rather than guessing.
 
-### Stock firmware or the glkvm-firmware image?
-
-**No custom firmware is needed.** Every call this integration makes goes to
-stock kvmd and GL.iNet endpoints over `https://<unit>`, and none of the
-modules patched by the glkvm-firmware project is on any
-path it uses (no Redfish, no OCR, no VNC, no port 8888, no Prometheus
-export). The unit it was verified against runs that project's provisioned
-1.10.0 image, and only two of its settings change what you see here — both
-are lines in `/etc/kvmd/override.yaml`, not the image:
-
-| Setting | On stock firmware | With the setting |
-|---|---|---|
-| `kvmd.streamer.forever: true` | the Screen camera has a picture only while GL.iNet's web UI is open, otherwise "no image" | a picture at every refresh |
-| `otg.devices.msd.start_cdrom` / `start_flash: true` | virtual media reports offline on 1.10.0 | virtual media online at boot; GL.iNet's own USB-functions toggle in their web UI sets the same thing without a shell |
-
-Everything else — power state and buttons on the ATX board, keyboard and
-mouse, Wake-on-LAN, HDMI signal, host information — behaves identically on
-stock. A stock unit needs its login entered; a unit with authentication
-disabled accepts anything.
-
 ## Requirements
 
 - Home Assistant 2026.3 or newer. That is the release that reads a custom
@@ -109,6 +89,13 @@ disabled accepts anything.
   nothing newer than 2025.4.
 - A GL.iNet KVM reachable from Home Assistant on your LAN, by IP address.
 - Its login, unless you have disabled authentication on the unit.
+- No custom firmware. Every call goes to stock kvmd and GL.iNet endpoints
+  over `https://<unit>`, and no module the glkvm-firmware project patches is
+  on a path this integration uses: no Redfish, no OCR, no VNC, no port 8888,
+  no Prometheus export. The unit it was verified against runs that project's
+  provisioned 1.10.0 image. Two of its settings change what you see, both
+  lines in the unit's `/etc/kvmd/override.yaml` rather than anything in the
+  image; known limitations names them.
 
 ## Installation
 
@@ -191,10 +178,9 @@ running. The health sensors are created the first time the unit's health
 section answers, so a read that failed at startup does not hide them until
 the next reload.
 
-Thirty seconds is deliberate. Host power, video signal and attached media
-change at human speed, and the unit's CPU belongs to its video encoder. The
-same state is available as a push stream over `/api/ws`; polling is the first
-implementation, not the last.
+The interval is thirty seconds because host power, video signal and attached
+media change at human speed, and the unit's CPU belongs to its video encoder.
+The unit also carries the same state as a push stream over `/api/ws`.
 
 ## Examples
 
@@ -285,31 +271,32 @@ sequence:
 
 ## Known limitations
 
-- **The Screen camera is a still-image camera.** kvmd serves the current frame
+- The Screen camera is a still-image camera. kvmd serves the current frame
   as a JPEG; GL.iNet's live path is WebRTC and its raw H.264 stream is not
   something the camera platform can play. Cards refresh the still every two
   seconds.
-- **On stock firmware the camera has a picture only while GL.iNet's own web UI
-  is watching.** Their firmware starts kvmd's streamer on demand. Setting
-  `kvmd: {streamer: {forever: true}}` in `/etc/kvmd/override.yaml` on the unit
-  keeps it running; a repair issue says so when the streamer has been stopped
-  for three polls.
-- **Virtual media is offline on a stock 1.10.0 unit.** That firmware ships the
+- On stock firmware the camera has a picture only while GL.iNet's own web UI
+  is watching, otherwise it reports no image. Their firmware starts kvmd's
+  streamer on demand. Setting `kvmd: {streamer: {forever: true}}` in
+  `/etc/kvmd/override.yaml` on the unit keeps it running, so the still is
+  there at every refresh; a repair issue says so when the streamer has been
+  stopped for three polls.
+- Virtual media is offline on a stock 1.10.0 unit. That firmware ships the
   mass-storage functions unlinked from the USB gadget. Enabling USB functions
   in GL.iNet's own web UI fixes it without a shell (it writes the same keys to
   the unit's `boot.yaml`); so does setting
   `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` in
   `override.yaml` and rebooting. A repair issue says so. Images smaller than
   614,400 bytes are rejected by the unit's kernel.
-- **Power control needs GL.iNet's ATX board.** Without it the power switch and
+- Power control needs GL.iNet's ATX board. Without it the power switch and
   the three buttons are unavailable, and the `power` action refuses.
-- **Keyboard connected and Mouse connected are lazy.** kvmd updates them on
+- Keyboard connected and Mouse connected are lazy. kvmd updates them on
   the next successful write, so a host that has stopped polling the gadget
   still reads connected until something is typed.
-- **Authentication is per request.** The unit accepts the credentials as
-  headers on every call; if it has authentication disabled, whatever you enter
-  works, which is the correct answer.
-- **Discovery needs mDNS to reach Home Assistant.** The announcement is
+- Authentication is per request. The unit accepts the credentials as
+  headers on every call. A unit with authentication disabled accepts whatever
+  you enter.
+- Discovery needs mDNS to reach Home Assistant. The announcement is
   filtered on the model, so only Comet KVMs are offered; a unit on a segment
   that does not forward mDNS has to be added by address. A unit whose entry
   has no stored MAC yet, because it was added before this version, is offered
@@ -341,7 +328,8 @@ logger:
 ```
 
 Download diagnostics from the device page for a report with the host, serial,
-credentials and every MAC and IP address redacted.
+credentials, every MAC and IP address and every Wake-on-LAN target name
+redacted. Stored image filenames are left in clear.
 
 ## Development
 
@@ -384,8 +372,6 @@ repository contradicts. The scale is a core-integration concept; a custom
 integration builds to the rules and is not scored.
 
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
-
-Publication status is in [PUBLISHING.md](PUBLISHING.md).
 
 ## Licence
 
