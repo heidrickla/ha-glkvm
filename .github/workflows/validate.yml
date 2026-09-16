@@ -3,7 +3,7 @@ name: Validate
 # Required for a HACS default-store submission. Both jobs must be GREEN BEFORE
 # the release is tagged - HACS checks the order the artifacts were created in,
 # so a release cut before CI passes fails review even though the repo later
-# turns green. See PUBLISHING.md.
+# turns green.
 
 on:
   push:
