@@ -137,7 +137,16 @@ jobs:
       - name: mypy strict
         run: .venv/bin/python -m mypy custom_components/glkvm
 
+      # The name half of the tree scan is the only rule that reaches a
+      # development host under a public domain, where no address rule and no
+      # suffix rule can. The names come from a secret because naming them in
+      # the tree is the disclosure the rule exists to prevent, and it is set
+      # here and not in .github/workflows/tests.yml because the failure line
+      # prints the name it matched and that job's log is public. Unset, the
+      # run reports 0 names and the address and suffix rules still apply.
       - name: Offline HACS and hassfest checks
+        env:
+          HA_DEV_HOST_NAMES: ${{ secrets.HA_DEV_HOST_NAMES }}
         run: .venv/bin/python tools/validate_local.py
 
   hacs:

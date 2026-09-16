@@ -353,7 +353,9 @@ user-GPIO channel name redacted. Stored image filenames are left in clear.
   user-facing exceptions raised without a translation key. Its published-tree
   scan reads every file git lists except the binary suffixes, and refuses
   private IPv4 and IPv6 address literals, private-suffix and dotless URL
-  hosts, and any host name listed in `HA_DEV_HOST_NAMES`, comma separated.
+  hosts, and any host name listed in `HA_DEV_HOST_NAMES`, comma separated. The
+  forge job supplies that list from a secret. The GitHub job does not, because
+  the failure line prints the name it matched.
 - `python tools/make_brand.py` regenerates the brand images and checks their
   sizes, transparency and fill.
 
