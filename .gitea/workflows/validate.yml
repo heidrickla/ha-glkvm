@@ -30,7 +30,7 @@ jobs:
 
       # No ast.parse step here on purpose. The default python3 in this job is
       # 3.10.12 and this integration uses PEP 695 `type X = ...`, which that
-      # interpreter cannot parse. Ruff already parses every file at py313, and
+      # interpreter cannot parse. Ruff already parses every file at py314, and
       # tools/validate_local.py runs in the job below.
       - name: JSON is valid
         run: |
