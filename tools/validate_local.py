@@ -253,6 +253,7 @@ def internal_names() -> list[str]:
 # --others adds a file staged for this commit but not yet added.
 PUBLISHED_SUFFIXES = {
     ".cfg",
+    ".html",
     ".ini",
     ".json",
     ".md",
