@@ -6,6 +6,16 @@ numbers are the ones in `manifest.json`. Changes that only move code around,
 or that touch tests and CI, are not listed unless they change what the
 integration does.
 
+## [0.2.1] - 2026-09-15
+
+### Fixed
+
+- Wake-on-LAN target names are redacted from downloadable diagnostics. The
+  name is the label the unit stores for a machine on your LAN, in practice
+  that machine's hostname, and it went out in clear in a file people attach
+  to public issues. Stored image filenames use the same key and stay in
+  clear, so the report still shows what the virtual drive is presenting.
+
 ## [0.2.0] - 2026-09-05
 
 ### Added
