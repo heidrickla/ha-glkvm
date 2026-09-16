@@ -1,10 +1,7 @@
 name: Validate
 
-# Runs on a self-hosted act_runner.
-#
-# THE RUNNER IS SHARED AND ITS CAPACITY IS 1. Other agent sessions queue behind
-# anything pushed here, so an ordinary push runs ONE fast job. Anything that
-# installs Home Assistant is workflow_dispatch only.
+# The runner is small, so the jobs that install Home Assistant are
+# workflow_dispatch only and an ordinary push runs the lint job alone.
 
 on:
   push:
@@ -78,9 +75,8 @@ jobs:
           print(f"{len(rules)} rules; still todo: {', '.join(todo) or 'none'}")
           PY
 
-  # Installs Home Assistant, so it is manual only and never occupies the shared
-  # runner on an ordinary push. This is the job that runs tests/ha/ and the
-  # strict mypy that means something.
+  # The only job with Home Assistant installed, so it runs tests/ha/ and
+  # mypy strict.
   home-assistant:
     name: Home Assistant layer
     if: github.event_name == 'workflow_dispatch'
@@ -97,9 +93,9 @@ jobs:
           python-version: "3.14"
 
       # Two virtual environments, so the job neither inherits nor leaves
-      # anything in the runner's shared Python toolcache. Another repository's
-      # job had left its packages there, among them an aiodns too old for the
-      # pycares beside it, and `import aiohttp` failed before one test ran.
+      # anything in the runner's shared Python toolcache. A stale aiodns in
+      # that cache, too old for the pycares beside it, made `import aiohttp`
+      # fail before one test ran.
       #
       # pytest-homeassistant-custom-component pins Home Assistant exactly;
       # 0.13.357 is Home Assistant 2026.8.3, the version this was verified on.
