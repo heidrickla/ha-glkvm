@@ -15,6 +15,12 @@ from .coordinator import GlkvmConfigEntry
 # the machines on its LAN. Diagnostics files end up in public issue trackers.
 REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD, "serial", "hostname", "mac", "ip"}
 
+# The Wake-on-LAN list only. WolTarget.name is the label the unit stores for a
+# machine on the LAN, in practice that machine's hostname. MsdImage.name and
+# MsdState.image are ISO filenames under the same key, and redacting those
+# hides what the drive is presenting, so the addition cannot be global.
+WOL_REDACT = REDACT | {"name"}
+
 
 def _plain(value: Any) -> Any:
     """Tuples to lists, recursively.
@@ -34,6 +40,9 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: GlkvmConfigEntry
 ) -> dict[str, Any]:
     coordinator = entry.runtime_data
+    data = _plain(asdict(coordinator.data)) if coordinator.data else {}
+    if "wol" in data:
+        data["wol"] = async_redact_data(data["wol"], WOL_REDACT)
     return {
         "config": async_redact_data(dict(entry.data), REDACT),
         "system": async_redact_data(
@@ -41,7 +50,5 @@ async def async_get_config_entry_diagnostics(
         ),
         "firmware": asdict(coordinator.firmware) if coordinator.firmware else {},
         "last_update_success": coordinator.last_update_success,
-        "data": async_redact_data(
-            _plain(asdict(coordinator.data)) if coordinator.data else {}, REDACT
-        ),
+        "data": async_redact_data(data, REDACT),
     }

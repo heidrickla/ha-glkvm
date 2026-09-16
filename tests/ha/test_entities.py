@@ -429,5 +429,13 @@ async def test_diagnostics_redact_what_identifies_the_household(
     assert diag["config"]["password"] == "**REDACTED**"
     assert diag["system"]["serial"] == "**REDACTED**"
     assert diag["data"]["wol"][0]["mac"] == "**REDACTED**"
+    assert diag["data"]["wol"][0]["ip"] == "**REDACTED**"
+    # The label the unit stores for a machine on the LAN, in practice its
+    # hostname. The two assertions below are the positive control: MsdImage
+    # and MsdState use the same key on an ISO filename and keep it in clear,
+    # so the redaction is proven scoped to the Wake-on-LAN list.
+    assert diag["data"]["wol"][0]["name"] == "**REDACTED**"
+    assert diag["data"]["msd"]["images"][0]["name"] == "rescue.iso"
+    assert diag["data"]["msd"]["image"] == "ubuntu.iso"
     assert diag["firmware"]["model"] == "RM10"
     assert diag["data"]["streamer"]["running"] is True
