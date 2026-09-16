@@ -7,9 +7,12 @@ exceptions raised against exceptions declared, user-facing exceptions raised
 without a translation key, actions registered against actions described, the
 three version fields against each other, the quality scale against the pinned
 rule list, the documentation and issue-tracker URLs against hosts a user
-cannot open, and every published file against private address literals,
-private-suffix and dotless URL hosts, plus any names in HA_DEV_HOST_NAMES.
-Run it before a push so the push is not the first verification.
+cannot open, and every published text file against private IPv4 and IPv6
+address literals, private-suffix and dotless URL hosts, plus any names in
+HA_DEV_HOST_NAMES. Every file git lists is scanned except the binary suffixes
+and the one exempt file, and a file that will not decode as UTF-8 is reported
+rather than skipped. Run it before a push so the push is not the first
+verification.
 
     python tools/validate_local.py
     HA_DEV_HOST_NAMES=<name>,<name> python tools/validate_local.py
@@ -251,32 +254,52 @@ def internal_names() -> list[str]:
 # comes from git rather than a walk: git already knows what is ignored, which
 # is how private operational notes under an ignored directory stay out, and
 # --others adds a file staged for this commit but not yet added.
-PUBLISHED_SUFFIXES = {
-    ".cfg",
-    ".html",
-    ".ini",
-    ".json",
-    ".md",
-    ".py",
-    ".toml",
-    ".txt",
-    ".yaml",
-    ".yml",
-}
-PUBLISHED_NAMES = {
-    ".gitattributes",
-    ".gitignore",
-    "CODEOWNERS",
-    "LICENSE",
-    "LICENSE-APACHE",
-    "NOTICE",
+#
+# A deny-list of binary suffixes, not an allow-list of text ones. An allow-list
+# passes every file type nobody listed, which is how a shell script, a
+# Dockerfile or a .env.example would ship unscanned; the deny-list only has to
+# name the files whose bytes are not text.
+BINARY_SUFFIXES = {
+    ".bin",
+    ".bmp",
+    ".gif",
+    ".gz",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".mo",
+    ".otf",
+    ".pdf",
+    ".png",
+    ".pyc",
+    ".pyd",
+    ".so",
+    ".tar",
+    ".ttf",
+    ".webp",
+    ".whl",
+    ".woff",
+    ".woff2",
+    ".zip",
 }
 # The one published file the scan skips: it holds the CIDRs the scan matches
 # on, so it would report itself. Nothing else may live in it.
 SCAN_EXEMPT = ("tools/_netblocks.py",)
 
 IP_LITERAL_RE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
-URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s\"'`<>)\]},]+")
+# Colon-separated hex groups, deliberately loose. Every candidate goes to
+# blocked_address, which parses it, so a MAC address, a clock time or a Python
+# slice costs one failed parse and yields no hit.
+IPV6_LITERAL_RE = re.compile(
+    r"(?<![0-9A-Za-z:])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![0-9A-Za-z:])"
+)
+# The bracketed-host form is matched first. The general form's character class
+# ends at the closing bracket, which hands urlsplit an unterminated IPv6 URL to
+# raise on rather than a host to judge.
+URL_RE = re.compile(
+    r"\b[a-zA-Z][a-zA-Z0-9+.\-]*://"
+    r"(?:\[[0-9A-Fa-f:.]+\][^\s\"'`<>)\]},]*|[^\s\"'`<>)\]},]+)"
+)
 # A host written in prose with no scheme. The suffix must end the name:
 # \b would match the "home" of home-assistant.io.
 BARE_HOST_RE = re.compile(
@@ -409,8 +432,7 @@ def published_files() -> list[str]:
         if path in SCAN_EXEMPT:
             continue
         name = path.rsplit("/", 1)[-1]
-        suffix = os.path.splitext(name)[1].lower()
-        if suffix in PUBLISHED_SUFFIXES or name in PUBLISHED_NAMES:
+        if os.path.splitext(name)[1].lower() not in BINARY_SUFFIXES:
             keep.append(path)
     return sorted(keep)
 
@@ -424,6 +446,9 @@ def tree_hits(text: str, name_re: Any = None) -> list[tuple[int, str]]:
                 if name.lower() not in ALLOWED_HOSTS:
                     hits.append((number, name.lower()))
         for literal in IP_LITERAL_RE.findall(line):
+            if literal not in ALLOWED_HOSTS and blocked_address(literal, TREE_NETS):
+                hits.append((number, literal))
+        for literal in IPV6_LITERAL_RE.findall(line):
             if literal not in ALLOWED_HOSTS and blocked_address(literal, TREE_NETS):
                 hits.append((number, literal))
         for url in URL_RE.findall(line):
@@ -477,6 +502,10 @@ def scan_published_tree() -> None:
         try:
             text = read(full)
         except OSError, UnicodeDecodeError:
+            failures.append(
+                f"{path} could not be read as UTF-8 text and its suffix is not "
+                "in BINARY_SUFFIXES, so the scan proved nothing about it"
+            )
             continue
         seen += 1
         for number, host in tree_hits(text, name_re):
