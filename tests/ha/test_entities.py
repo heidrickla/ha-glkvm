@@ -431,11 +431,18 @@ async def test_diagnostics_redact_what_identifies_the_household(
     assert diag["data"]["wol"][0]["mac"] == "**REDACTED**"
     assert diag["data"]["wol"][0]["ip"] == "**REDACTED**"
     # The label the unit stores for a machine on the LAN, in practice its
-    # hostname. The two assertions below are the positive control: MsdImage
-    # and MsdState use the same key on an ISO filename and keep it in clear,
-    # so the redaction is proven scoped to the Wake-on-LAN list.
+    # hostname.
     assert diag["data"]["wol"][0]["name"] == "**REDACTED**"
+    # Positive control: MsdImage and MsdState use the same key on an ISO
+    # filename and keep it in clear, so the redaction is proven scoped to the
+    # Wake-on-LAN list.
     assert diag["data"]["msd"]["images"][0]["name"] == "rescue.iso"
     assert diag["data"]["msd"]["image"] == "ubuntu.iso"
+    # The name the user gave the channel in kvmd's scheme, so it names
+    # household hardware. The fixture's channels are "door", "demo_button"
+    # and "relay".
+    assert diag["data"]["gpio"]["inputs"][0]["channel"] == "**REDACTED**"
+    assert diag["data"]["gpio"]["outputs"][0]["channel"] == "**REDACTED**"
+    assert diag["data"]["gpio"]["outputs"][0]["state"] is False
     assert diag["firmware"]["model"] == "RM10"
     assert diag["data"]["streamer"]["running"] is True

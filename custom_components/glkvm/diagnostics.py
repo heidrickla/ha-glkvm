@@ -21,6 +21,11 @@ REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD, "serial", "hostname", "mac", 
 # hides what the drive is presenting, so the addition cannot be global.
 WOL_REDACT = REDACT | {"name"}
 
+# The user-GPIO sections only. GpioChannel.channel is the name the user gave
+# the channel in kvmd's scheme, so it names household hardware. Direction,
+# switch, pulse delay and state stay in clear.
+GPIO_REDACT = REDACT | {"channel"}
+
 
 def _plain(value: Any) -> Any:
     """Tuples to lists, recursively.
@@ -43,6 +48,8 @@ async def async_get_config_entry_diagnostics(
     data = _plain(asdict(coordinator.data)) if coordinator.data else {}
     if "wol" in data:
         data["wol"] = async_redact_data(data["wol"], WOL_REDACT)
+    if data.get("gpio"):
+        data["gpio"] = async_redact_data(data["gpio"], GPIO_REDACT)
     return {
         "config": async_redact_data(dict(entry.data), REDACT),
         "system": async_redact_data(
