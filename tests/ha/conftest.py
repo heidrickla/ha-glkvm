@@ -1,9 +1,10 @@
 """Fixtures for the Home Assistant layer tests.
 
-These run against Home Assistant, on Linux, in CI - not on a Windows
-workstation, where the harness blocks sockets and the ProactorEventLoop needs a
-local socket pair for its own self-pipe. They skip when the harness is absent,
-so the pure suite one level up still runs on a bare checkout.
+These run against Home Assistant. On Linux they need nothing extra. On Windows
+tests.winposix supplies the POSIX modules Home Assistant imports and the two
+shims the event loop needs; install_ha_layer_shims() below is that call. They
+skip when the harness is absent, so the pure suite one level up still runs on a
+bare checkout.
 
 THIS CONFTEST LIVES IN ITS OWN DIRECTORY ON PURPOSE. Its autouse fixture pulls
 in Home Assistant machinery, and a conftest applies to everything at or below
@@ -22,6 +23,10 @@ from typing import Any
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component")
+
+from tests.winposix import install_ha_layer_shims
+
+install_ha_layer_shims()
 
 from homeassistant.const import (
     CONF_HOST,

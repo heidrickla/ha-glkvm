@@ -28,7 +28,11 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# -p tests.winposix loads the Windows stand-ins before the
+# pytest-homeassistant-custom-component entry point plugin imports
+# homeassistant.runner, which a conftest is too late for. It returns
+# immediately on Linux.
+addopts = "-q -p tests.winposix"
 # pytest-homeassistant-custom-component's `hass` fixture is async, and pytest
 # does not handle async fixtures natively. Without this every tests/ha test
 # errors with "requested an async fixture with no plugin or hook that handled
