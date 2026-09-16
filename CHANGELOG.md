@@ -15,6 +15,10 @@ integration does.
   that machine's hostname, and it went out in clear in a file people attach
   to public issues. Stored image filenames use the same key and stay in
   clear, so the report still shows what the virtual drive is presenting.
+- User-GPIO channel names are redacted from downloadable diagnostics. The
+  channel name is the one you gave it in the unit's GPIO scheme, so it names
+  hardware in your house. Each channel's direction, switch, pulse delay and
+  state stay in clear.
 
 ## [0.2.0] - 2026-09-05
 
