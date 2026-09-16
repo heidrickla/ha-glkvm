@@ -4,7 +4,7 @@ Since Home Assistant 2026.3 a custom integration carries its own brand images
 and no pull request against `home-assistant/brands` is needed. HACS reads
 `custom_components/<domain>/brand/` first.
 
-Sizes are exact requirements, not suggestions:
+Sizes:
 
     icon.png       256x256 exactly
     icon@2x.png    512x512 exactly

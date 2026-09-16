@@ -112,8 +112,6 @@ class GlkvmJigglerSwitch(GlkvmEntity, SwitchEntity):
 
     On is `jiggler.active`, the running state; `jiggler.enabled` is the
     unit's configuration and only decides whether the switch is available.
-    The first version read `enabled` and showed on while nothing jiggled -
-    caught by turning it off on the real unit and watching nothing change.
     """
 
     _attr_translation_key = "mouse_jiggler"

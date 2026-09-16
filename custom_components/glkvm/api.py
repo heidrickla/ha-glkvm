@@ -10,7 +10,7 @@ noted where they matter.
 
 No Home Assistant import and no dependency beyond aiohttp, so this module and
 models.py can be tested on a bare interpreter and lifted into a standalone
-library when the integration goes to core.
+library unchanged.
 
 Authentication is stateless: kvmd accepts `X-KVMD-User` / `X-KVMD-Passwd` on
 every request, so there is no session to expire and nothing to store. A unit
@@ -210,8 +210,7 @@ class GlkvmClient:
     async def check_auth(self) -> None:
         """Raise GlkvmAuthError unless the credentials are accepted.
 
-        On a unit with authentication disabled this succeeds with anything,
-        which is the correct answer: whatever was entered will work.
+        On a unit with authentication disabled this succeeds with anything.
         """
         await self._get("/api/auth/check")
 

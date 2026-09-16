@@ -17,9 +17,8 @@ DEFAULT_VERIFY_SSL = False
 
 # What changes on a KVM changes at human speed - a host powering off, a video
 # signal dropping, an image being attached. Thirty seconds notices all of that
-# while leaving the unit's CPU to the video encoder that is its real job. The
-# same state is available as a push stream over /api/ws; polling is the first
-# implementation, not the last.
+# while leaving the unit's CPU to the video encoder. The same state is
+# available as a push stream over /api/ws.
 SCAN_INTERVAL = timedelta(seconds=30)
 
 # The seven sections one poll reads, each from its own endpoint. A section
