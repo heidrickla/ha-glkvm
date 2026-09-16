@@ -328,8 +328,8 @@ logger:
 ```
 
 Download diagnostics from the device page for a report with the host, serial,
-credentials, every MAC and IP address and every Wake-on-LAN target name
-redacted. Stored image filenames are left in clear.
+credentials, every MAC and IP address, every Wake-on-LAN target name and every
+user-GPIO channel name redacted. Stored image filenames are left in clear.
 
 ## Development
 
