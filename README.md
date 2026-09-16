@@ -342,8 +342,12 @@ redacted. Stored image filenames are left in clear.
   fake that answers from the same fixtures. The GitHub `Tests` workflow runs
   it on every push against a pinned Home Assistant release, with mypy in
   strict mode and both suites measured into one coverage figure that fails
-  the job under 95%; it skips where the Home Assistant test harness is
-  absent, which includes Windows.
+  the job under 95%. The suite skips where the Home Assistant test harness is
+  absent. On Windows `tests/winposix.py`, loaded by `-p tests.winposix` from
+  `pyproject.toml`, supplies the POSIX modules Home Assistant imports and the
+  two shims its event loop needs. Both suites, 150 tests, passed on Windows 11
+  with Python 3.14.7, Home Assistant 2026.8.3 and
+  pytest-homeassistant-custom-component 0.13.357 on 2026-09-16.
 - `python tools/validate_local.py` is the offline half of the hassfest and
   HACS checks plus every cross-file consistency check, including a scan for
   user-facing exceptions raised without a translation key.
