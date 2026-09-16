@@ -282,6 +282,12 @@ BINARY_SUFFIXES = {
     ".woff2",
     ".zip",
 }
+# Build artefacts the walk fallback drops, the file half of the directory list
+# it already prunes. git excludes them itself, so this list only applies when
+# git is absent. .coverage is a SQLite database with no suffix to deny, and
+# under the deny-list it would otherwise be read, fail to decode and report a
+# failure against a file that never ships.
+WALK_SKIP_NAMES = {".coverage", "coverage.xml"}
 # The one published file the scan skips: it holds the CIDRs the scan matches
 # on, so it would report itself. Nothing else may live in it.
 SCAN_EXEMPT = ("tools/_netblocks.py",)
@@ -424,6 +430,8 @@ def published_files() -> list[str]:
                 and not (d.startswith(".") and d not in {".gitea", ".github"})
             ]
             for f in files:
+                if f in WALK_SKIP_NAMES:
+                    continue
                 paths.append(
                     os.path.relpath(os.path.join(dirpath, f), ROOT).replace("\\", "/")
                 )
