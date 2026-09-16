@@ -6,7 +6,8 @@ consistency that nothing else checks: translation keys against icons,
 exceptions raised against exceptions declared, user-facing exceptions raised
 without a translation key, actions registered against actions described, the
 three version fields against each other, the quality scale against the pinned
-rule list, the documentation and issue-tracker URLs against LAN hosts. Run it
+rule list, the documentation and issue-tracker URLs against hosts a user
+cannot open, and every published file against a development host. Run it
 before a push so the push is not the first verification.
 
     python tools/validate_local.py
@@ -19,9 +20,15 @@ import ipaddress
 import json
 import os
 import re
+import subprocess
 import sys
-import urllib.parse
 from typing import Any
+from urllib.parse import urlsplit
+
+# tools/ is not on sys.path when this file is run by path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import _netblocks
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DOMAIN = "glkvm"
@@ -178,30 +185,6 @@ def untranslated_raises(source: str, filename: str) -> list[str]:
     return found
 
 
-# A host only this LAN can resolve or route to. The literal ranges are
-# 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16, ::1
-# and fc00::/7, which ipaddress reports as private, loopback or link-local.
-NON_ROUTABLE_SUFFIXES = (".local", ".lan", ".internal")
-
-
-def unreachable_host(url: str) -> str | None:
-    """The host of url, when a user outside this LAN could not reach it."""
-    host = urllib.parse.urlsplit(url).hostname
-    if not host:
-        return None
-    if host == "localhost" or host.endswith(NON_ROUTABLE_SUFFIXES):
-        return host
-    if "." not in host and ":" not in host:
-        return host
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return None
-    if address.is_private or address.is_loopback or address.is_link_local:
-        return host
-    return None
-
-
 def pyproject_version() -> str | None:
     """The version in pyproject.toml, or None when the file does not carry one."""
     path = os.path.join(ROOT, "pyproject.toml")
@@ -213,6 +196,288 @@ def pyproject_version() -> str | None:
         project = tomllib.load(fh).get("project", {})
     version = project.get("version")
     return str(version) if version is not None else None
+
+
+REPO_ALLOWED_HOSTS = frozenset(
+    {
+        # the hostname the KVM reports about itself, in api.py, the flow and
+        # the fixtures
+        "localhost.localdomain",
+        # the zeroconf name in tests/ha/test_config_flow.py
+        "gl-rm10-215.local",
+    }
+)
+
+
+# ------------------------------------------------- development-host refusal
+# hassfest and the HACS action read the manifest and nothing else, so a
+# development address anywhere in the tree - a workflow comment, a README, a
+# docstring - ships with every check green. Two rules, one strict and one
+# narrower: the manifest URLs are refused for anything a user cannot open,
+# and every published file is refused for anything that names this network.
+MANIFEST_NETS = tuple(
+    ipaddress.ip_network(c)
+    for c in _netblocks.TREE_CIDRS + _netblocks.MANIFEST_ONLY_CIDRS
+)
+TREE_NETS = tuple(ipaddress.ip_network(c) for c in _netblocks.TREE_CIDRS)
+MANIFEST_ONLY_NAMES = ("localhost",)
+PRIVATE_SUFFIXES = _netblocks.PRIVATE_SUFFIXES
+
+# Hosts that look like a development host and are not one. Every entry is
+# load-bearing in this repository and carries the reason on its line; an
+# entry added without one is how the rule stops working.
+ALLOWED_HOSTS = frozenset(
+    {
+        # the default Home Assistant address, in every install document
+        "homeassistant.local",
+    }
+    | REPO_ALLOWED_HOSTS
+)
+
+# Text that ships to whoever clones or installs the repository. The file list
+# comes from git rather than a walk: git already knows what is ignored, which
+# is how private operational notes under an ignored directory stay out, and
+# --others adds a file staged for this commit but not yet added.
+PUBLISHED_SUFFIXES = {
+    ".cfg",
+    ".ini",
+    ".json",
+    ".md",
+    ".py",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+PUBLISHED_NAMES = {
+    ".gitattributes",
+    ".gitignore",
+    "CODEOWNERS",
+    "LICENSE",
+    "LICENSE-APACHE",
+    "NOTICE",
+}
+# The one published file the scan skips: it holds the CIDRs the scan matches
+# on, so it would report itself. Nothing else may live in it.
+SCAN_EXEMPT = ("tools/_netblocks.py",)
+
+IP_LITERAL_RE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s\"'`<>)\]},]+")
+# A host written in prose with no scheme. The suffix must end the name:
+# \b would match the "home" of home-assistant.io.
+BARE_HOST_RE = re.compile(
+    r"(?<![\w.-])(?:[a-z0-9][a-z0-9-]*\.)+"
+    r"(?:corp|home|home\.arpa|intranet|internal|lan|local|localdomain)(?![\w-])",
+    re.IGNORECASE,
+)
+# A host made of anything else is a template - f"http://{host}/" - not a host.
+HOST_CHARS_RE = re.compile(r"^[a-z0-9.\-\[\]:]+$", re.IGNORECASE)
+
+
+def is_netmask(text: str) -> bool:
+    """A dotted quad written as a contiguous subnet mask, 255.255.255.0 and up.
+
+    Every such mask sits in the top reserved block and would otherwise be
+    refused as a reserved address. The all-zero mask is a mask too, and is
+    deliberately not exempt: as a host it is the unspecified address.
+    """
+    if not text.startswith("255."):
+        return False
+    try:
+        value = int(ipaddress.IPv4Address(text))
+    except ipaddress.AddressValueError:
+        return False
+    inverted = (~value) & 0xFFFFFFFF
+    return inverted & (inverted + 1) == 0
+
+
+def blocked_address(text: str, nets: tuple[Any, ...]) -> bool:
+    """Whether text is an address literal inside one of nets."""
+    if is_netmask(text):
+        return False
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return any(address in net for net in nets)
+
+
+def blocked_host(host: str, nets: tuple[Any, ...], names: tuple[str, ...] = ()) -> bool:
+    """Whether a hostname resolves or routes inside one network only.
+
+    `names` are hosts refused by spelling rather than by address family. Only
+    the manifest rule passes any: "localhost" names no machine on this
+    network, so it is a dead documentation link but not a disclosure.
+    """
+    host = host.strip().rstrip(".").lower()
+    if not host or host in ALLOWED_HOSTS:
+        return False
+    if host in names:
+        return True
+    if blocked_address(host, nets):
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        # A literal outside nets is a public address, whatever its shape.
+        return False
+    if host.endswith(PRIVATE_SUFFIXES):
+        return True
+    # A name with no dot is resolved against whatever search domain the reader
+    # happens to have, so it names a machine on a LAN rather than on the net.
+    return "." not in host
+
+
+def unreachable_host(url: str) -> str | None:
+    """The host of a manifest URL no user outside this network can open."""
+    if not isinstance(url, str) or not url:
+        return None
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return None
+    if host and not HOST_CHARS_RE.match(host):
+        return None
+    return host if blocked_host(host, MANIFEST_NETS, MANIFEST_ONLY_NAMES) else None
+
+
+def malformed_url(url: Any) -> bool:
+    """A manifest URL that is not an absolute http(s) URL with a host.
+
+    Kept because envisalink's superseded helper refused a hostless string and
+    unreachable_host cannot: its answer is a host or None, and "not-a-url" has
+    no host to report.
+    """
+    if not isinstance(url, str) or not url:
+        return True
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return True
+    return parts.scheme not in {"http", "https"} or not parts.hostname
+
+
+def published_files() -> list[str]:
+    """Every text file that ships, relative to ROOT, from git's own index.
+
+    Falls back to a walk when git is not there - an extracted tarball - so the
+    rule still runs, and says so, rather than passing on an empty list.
+    """
+    paths: list[str] = []
+    try:
+        listing = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        listing = None
+    if listing is not None and listing.returncode == 0:
+        paths = [p for p in listing.stdout.split("\0") if p]
+    else:
+        notes.append("git not available - the tree scan walked the directory instead")
+        for dirpath, dirs, files in os.walk(ROOT):
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in {"__pycache__", "venv", "htmlcov", "node_modules"}
+                and not (d.startswith(".") and d not in {".gitea", ".github"})
+            ]
+            for f in files:
+                paths.append(
+                    os.path.relpath(os.path.join(dirpath, f), ROOT).replace("\\", "/")
+                )
+    keep: list[str] = []
+    for path in paths:
+        if path in SCAN_EXEMPT:
+            continue
+        name = path.rsplit("/", 1)[-1]
+        suffix = os.path.splitext(name)[1].lower()
+        if suffix in PUBLISHED_SUFFIXES or name in PUBLISHED_NAMES:
+            keep.append(path)
+    return sorted(keep)
+
+
+def tree_hits(text: str, name_re: Any = None) -> list[tuple[int, str]]:
+    """Every development host named in text, as (line number, host)."""
+    hits: list[tuple[int, str]] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if name_re is not None:
+            for name in name_re.findall(line):
+                if name.lower() not in ALLOWED_HOSTS:
+                    hits.append((number, name.lower()))
+        for literal in IP_LITERAL_RE.findall(line):
+            if literal not in ALLOWED_HOSTS and blocked_address(literal, TREE_NETS):
+                hits.append((number, literal))
+        for url in URL_RE.findall(line):
+            try:
+                host = urlsplit(url).hostname or ""
+            except ValueError:
+                continue
+            if not host or not HOST_CHARS_RE.match(host):
+                continue
+            if blocked_host(host, TREE_NETS):
+                hits.append((number, host))
+        for name in BARE_HOST_RE.findall(line):
+            if name.lower() not in ALLOWED_HOSTS:
+                hits.append((number, name.lower()))
+    return hits
+
+
+def scan_published_tree() -> None:
+    """Refuse a development host anywhere in the published tree."""
+    exempt = os.path.join(ROOT, *SCAN_EXEMPT[0].split("/"))
+    if os.path.isfile(exempt):
+        allowed_names = {"TREE_CIDRS", "MANIFEST_ONLY_CIDRS", "PRIVATE_SUFFIXES"}
+        for node in ast.parse(read(exempt)).body:
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                continue
+            if isinstance(node, ast.ImportFrom) and node.module == "__future__":
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else []
+            if not all(
+                isinstance(t, ast.Name) and t.id in allowed_names for t in targets
+            ):
+                failures.append(
+                    f"{SCAN_EXEMPT[0]} holds more than the pinned address space; "
+                    "the tree scan skips this file, so nothing else may live in it"
+                )
+                break
+    # A repository that knows its own development host names - read from
+    # outside the tree, because naming them in a published file is the
+    # disclosure this rule exists to prevent - has them matched as well.
+    name_re = None
+    finder = globals().get("internal_names")
+    if callable(finder):
+        names = finder()
+        if names:
+            name_re = re.compile(
+                r"\b(?:" + "|".join(re.escape(n) for n in names) + r")\w*",
+                re.IGNORECASE,
+            )
+            notes.append(f"{len(names)} development host names given to the tree scan")
+        else:
+            notes.append("no development host names given to the tree scan")
+    seen = 0
+    for path in published_files():
+        full = os.path.join(ROOT, *path.split("/"))
+        if not os.path.isfile(full):
+            continue
+        try:
+            text = read(full)
+        except (OSError, UnicodeDecodeError):
+            continue
+        seen += 1
+        for number, host in tree_hits(text, name_re):
+            failures.append(
+                f"{path}:{number} names {host} - that host is on the development "
+                "network and means nothing to a user who installs this"
+            )
+    check(seen > 0, "the published-tree scan read no files, so it proved nothing")
 
 
 def main() -> int:
@@ -550,6 +815,15 @@ def main() -> int:
             "PARALLEL_UPDATES" in read(COMP, f"{platform}.py"),
             f"{platform}.py does not set PARALLEL_UPDATES",
         )
+
+    # ---------------------------------------------- development-host refusal
+    for _key in ("documentation", "issue_tracker"):
+        if _key in manifest:
+            check(
+                not malformed_url(manifest.get(_key)),
+                f"manifest {_key} is not an absolute http(s) URL a user can open",
+            )
+    scan_published_tree()
 
     # ---------------------------------------------------------- syntax
     for dirpath, _dirs, files in os.walk(COMP):
