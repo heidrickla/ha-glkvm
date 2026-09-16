@@ -6,7 +6,8 @@ consistency that nothing else checks: translation keys against icons,
 exceptions raised against exceptions declared, user-facing exceptions raised
 without a translation key, actions registered against actions described, the
 three version fields against each other, the quality scale against the pinned
-rule list. Run it before a push so the push is not the first verification.
+rule list, the documentation and issue-tracker URLs against LAN hosts. Run it
+before a push so the push is not the first verification.
 
     python tools/validate_local.py
 """
@@ -14,10 +15,12 @@ rule list. Run it before a push so the push is not the first verification.
 from __future__ import annotations
 
 import ast
+import ipaddress
 import json
 import os
 import re
 import sys
+import urllib.parse
 from typing import Any
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -175,6 +178,30 @@ def untranslated_raises(source: str, filename: str) -> list[str]:
     return found
 
 
+# A host only this LAN can resolve or route to. The literal ranges are
+# 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16, ::1
+# and fc00::/7, which ipaddress reports as private, loopback or link-local.
+NON_ROUTABLE_SUFFIXES = (".local", ".lan", ".internal")
+
+
+def unreachable_host(url: str) -> str | None:
+    """The host of url, when a user outside this LAN could not reach it."""
+    host = urllib.parse.urlsplit(url).hostname
+    if not host:
+        return None
+    if host == "localhost" or host.endswith(NON_ROUTABLE_SUFFIXES):
+        return host
+    if "." not in host and ":" not in host:
+        return host
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return None
+    if address.is_private or address.is_loopback or address.is_link_local:
+        return host
+    return None
+
+
 def pyproject_version() -> str | None:
     """The version in pyproject.toml, or None when the file does not carry one."""
     path = os.path.join(ROOT, "pyproject.toml")
@@ -214,11 +241,16 @@ def main() -> int:
         keys[:2] == ["domain", "name"] and keys[2:] == sorted(keys[2:]),
         "manifest keys must be domain, name, then alphabetical (hassfest MANIFEST)",
     )
-    if re.search(
-        r"//(?:localhost|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)",
-        manifest.get("documentation", ""),
-    ):
-        notes.append("documentation URL points at a LAN host - useless to a user")
+    # HACS serves both links to strangers. A forge or LAN URL here passes
+    # every other check and gives a user a page they cannot open.
+    for key in ("documentation", "issue_tracker"):
+        url = manifest.get(key)
+        host = unreachable_host(url) if isinstance(url, str) else None
+        check(
+            host is None,
+            f"manifest {key} points at {host!r}, which is not reachable "
+            f"outside this LAN",
+        )
     check(
         "quality_scale" not in manifest,
         "quality_scale in manifest.json: the badge is core-only, a custom "
