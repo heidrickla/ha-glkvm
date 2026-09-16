@@ -346,9 +346,8 @@ def unreachable_host(url: str) -> str | None:
 def malformed_url(url: Any) -> bool:
     """A manifest URL that is not an absolute http(s) URL with a host.
 
-    Kept because envisalink's superseded helper refused a hostless string and
-    unreachable_host cannot: its answer is a host or None, and "not-a-url" has
-    no host to report.
+    Separate from unreachable_host, whose answer is a host or None: a value
+    like "not-a-url" or an ftp:// URL has no host to report and would pass.
     """
     if not isinstance(url, str) or not url:
         return True
