@@ -7,10 +7,12 @@ exceptions raised against exceptions declared, user-facing exceptions raised
 without a translation key, actions registered against actions described, the
 three version fields against each other, the quality scale against the pinned
 rule list, the documentation and issue-tracker URLs against hosts a user
-cannot open, and every published file against a development host. Run it
-before a push so the push is not the first verification.
+cannot open, and every published file against private address literals,
+private-suffix and dotless URL hosts, plus any names in HA_DEV_HOST_NAMES.
+Run it before a push so the push is not the first verification.
 
     python tools/validate_local.py
+    HA_DEV_HOST_NAMES=<name>,<name> python tools/validate_local.py
 """
 
 from __future__ import annotations
@@ -234,6 +236,17 @@ ALLOWED_HOSTS = frozenset(
     | REPO_ALLOWED_HOSTS
 )
 
+# Development host names are matched too, and they cannot be listed here:
+# naming them in a published file is the disclosure this rule exists to
+# prevent. The environment carries them in from outside the tree.
+DEV_HOST_ENV = "HA_DEV_HOST_NAMES"
+
+
+def internal_names() -> list[str]:
+    """Development host names, comma separated, from the environment."""
+    return [n.strip() for n in os.environ.get(DEV_HOST_ENV, "").split(",") if n.strip()]
+
+
 # Text that ships to whoever clones or installs the repository. The file list
 # comes from git rather than a walk: git already knows what is ignored, which
 # is how private operational notes under an ignored directory stay out, and
@@ -446,21 +459,15 @@ def scan_published_tree() -> None:
                     "the tree scan skips this file, so nothing else may live in it"
                 )
                 break
-    # A repository that knows its own development host names - read from
-    # outside the tree, because naming them in a published file is the
-    # disclosure this rule exists to prevent - has them matched as well.
+    names = internal_names()
     name_re = None
-    finder = globals().get("internal_names")
-    if callable(finder):
-        names = finder()
-        if names:
-            name_re = re.compile(
-                r"\b(?:" + "|".join(re.escape(n) for n in names) + r")\w*",
-                re.IGNORECASE,
-            )
-            notes.append(f"{len(names)} development host names given to the tree scan")
-        else:
-            notes.append("no development host names given to the tree scan")
+    if names:
+        name_re = re.compile(
+            r"\b(?:" + "|".join(re.escape(n) for n in names) + r")\w*",
+            re.IGNORECASE,
+        )
+    plural = "name" if len(names) == 1 else "names"
+    notes.append(f"{len(names)} development host {plural} from {DEV_HOST_ENV}")
     seen = 0
     for path in published_files():
         full = os.path.join(ROOT, *path.split("/"))

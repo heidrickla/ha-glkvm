@@ -350,7 +350,10 @@ user-GPIO channel name redacted. Stored image filenames are left in clear.
   pytest-homeassistant-custom-component 0.13.357 on 2026-09-16.
 - `python tools/validate_local.py` is the offline half of the hassfest and
   HACS checks plus every cross-file consistency check, including a scan for
-  user-facing exceptions raised without a translation key.
+  user-facing exceptions raised without a translation key. Its published-tree
+  scan refuses private address literals, private-suffix and dotless URL hosts,
+  and any host name listed in `HA_DEV_HOST_NAMES`, comma separated, which
+  keeps those names out of the repository the scan exists to protect.
 - `python tools/make_brand.py` regenerates the brand images and checks their
   sizes, transparency and fill.
 
