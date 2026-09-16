@@ -74,8 +74,8 @@ has no ATX board.
 | Device | Firmware | Status |
 |---|---|---|
 | GL-RM10 Comet Pro | 1.10.0 | Verified: every entity and action was built against recorded answers from this unit. |
-| GL-RM10 Comet Pro | 1.8.1 | Expected to work without the health sensors (that firmware has no `health` section). Untested. |
-| GL-RM1 Comet | any | Same kvmd fork and API. Untested. |
+| GL-RM10 Comet Pro | 1.8.1 | Expected to work without the health sensors: that firmware has no `health` section, and a test covers an answer shaped that way. No 1.8.1 unit has been run against the integration as of 2026-09-15. |
+| GL-RM1 Comet | any | Same kvmd fork and API. No GL-RM1 has been run against the integration as of 2026-09-15. |
 
 The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not
 a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the
