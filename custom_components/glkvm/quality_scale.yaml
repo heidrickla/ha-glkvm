@@ -234,10 +234,17 @@ rules:
   strict-typing:
     status: done
     comment: |
-      pyproject.toml runs mypy with strict = true and no relaxations, plus
-      warn_unreachable, local_partial_types and no_implicit_optional, the
-      three core's own mypy.ini adds for an integration in .strict-typing.
-      Only the import codes core disables are disabled. The GitHub Tests job
+      pyproject.toml runs mypy with strict = true plus the block core's
+      generated mypy.ini sets for an integration in .strict-typing:
+      python_version, platform, local_partial_types, no_implicit_optional,
+      strict_bytes, warn_unreachable, extra_checks, follow_imports,
+      show_error_codes, enable_error_code and disable_error_code.
+      enable_error_code carries core's five, among them explicit-override,
+      which 46 methods here satisfy with @override. extra_checks = false is
+      core's value and is the one flag strict enables that this configuration
+      turns off; strict sets it, per mypy 1.18.2 --help. disable_error_code
+      carries core's three, annotation-unchecked and the two import codes.
+      The GitHub Tests job
       runs that configuration with Home Assistant installed on every push,
       which is the run that means anything: without Home Assistant every
       class it exports is Any and a local run cannot see a subclassing or
