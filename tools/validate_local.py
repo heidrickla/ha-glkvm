@@ -632,7 +632,11 @@ def main() -> int:
                         f"selector translation {tkey!r} missing from strings.json",
                     )
     except ImportError:
-        notes.append("PyYAML not installed - services.yaml not parsed")
+        check(
+            False,
+            "PyYAML not installed - services.yaml was not parsed, so its "
+            "checks did not run; run under the repo .venv",
+        )
 
     # ---------------------------------------------------------- quality scale
     scale_path = os.path.join(COMP, "quality_scale.yaml")
@@ -668,7 +672,11 @@ def main() -> int:
             if todo:
                 notes.append(f"quality scale still todo: {', '.join(todo)}")
         except ImportError:
-            notes.append("PyYAML not installed - quality_scale.yaml not parsed")
+            check(
+                False,
+                "PyYAML not installed - quality_scale.yaml was not parsed, so its "
+                "checks did not run; run under the repo .venv",
+            )
 
     # ------------------------------------------------- quality scale evidence
     # A rule filed `done` that the file set contradicts is worse than one
