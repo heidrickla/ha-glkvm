@@ -1,11 +1,6 @@
 # GL.iNet KVM for Home Assistant
 
-Local (no cloud) Home Assistant integration for GL.iNet Comet KVM-over-IP
-units: the host's power, its screen, the virtual USB drive, the keyboard
-and mouse gadget, Wake-on-LAN, and the KVM's own health, all as entities on
-one device. Built and verified against a GL-RM10 (Comet Pro) on firmware
-1.10.0. Everything talks to the unit over your LAN through the same API its
-own web interface uses.
+Local (no cloud) Home Assistant integration for GL.iNet Comet KVM-over-IP units: the host's power, its screen, the virtual USB drive, the keyboard and mouse gadget, Wake-on-LAN, and the KVM's own health, all as entities on one device. Built and verified against a GL-RM10 (Comet Pro) on firmware 1.10.0. Everything talks to the unit over your LAN through the same API its own web interface uses.
 
 ## What you get
 
@@ -27,16 +22,11 @@ own web interface uses.
 | CPU temperature, CPU usage, Memory usage | sensor | The KVM's own health (firmware 1.10.0 and later). |
 | *channel* | switch, button or binary sensor | One per user-GPIO channel configured on the unit: relays, smart plugs, KVM switch ports. |
 
-Memory available, both network rates, the H.264 bitrate and the stream client
-count are there too, disabled by default.
+Memory available, both network rates, the H.264 bitrate and the stream client count are there too, disabled by default.
 
 ### Actions
 
-Every action takes the KVM to talk to as `config_entry_id`, because you may
-have more than one. In the UI it is a picker; in YAML it is the entry id,
-which the picker fills in for you when you switch the editor to YAML mode.
-An action called while that KVM is unloaded is refused in words rather than
-failing silently.
+Every action takes the KVM to talk to as `config_entry_id`, because you may have more than one. In the UI it is a picker; in YAML it is the entry id, which the picker fills in for you when you switch the editor to YAML mode. An action called while that KVM is unloaded is refused in words rather than failing silently.
 
 `glkvm.type_text` types text into the host over the USB keyboard.
 
@@ -60,8 +50,7 @@ failing silently.
 | `config_entry_id` | yes | The KVM to send the packet from. |
 | `mac` | yes | The target's MAC address, `aa:bb:cc:dd:ee:ff` or `aa-bb-cc-dd-ee-ff`. Anything else is refused before the unit is asked. |
 
-`glkvm.power` is the full set of ATX power actions. It refuses when the unit
-has no ATX board.
+`glkvm.power` is the full set of ATX power actions. It refuses when the unit has no ATX board.
 
 | Field | Required | Meaning |
 |---|---|---|
@@ -77,52 +66,30 @@ has no ATX board.
 | GL-RM10 Comet Pro | 1.8.1 | No health sensors: that firmware has no `health` section, and a test covers an answer shaped that way. |
 | GL-RM1 Comet | any | Same kvmd fork and API. |
 
-The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not
-a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the
-ATX board's power reading, the firmware version and hostname endpoints, the
-Wake-on-LAN list), and degrades where they are absent rather than guessing.
+The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the ATX board's power reading, the firmware version and hostname endpoints, the Wake-on-LAN list), and degrades where they are absent rather than guessing.
 
 ## Requirements
 
-- Home Assistant 2026.3 or newer. That is the release that reads a custom
-  integration's brand images from its own folder; the code itself uses
-  nothing newer than 2025.4.
+- Home Assistant 2026.3 or newer. That is the release that reads a custom integration's brand images from its own folder; the code itself uses nothing newer than 2025.4.
 - A GL.iNet KVM reachable from Home Assistant on your LAN, by IP address.
 - Its login, unless you have disabled authentication on the unit.
-- Stock firmware. Every call goes to stock kvmd and GL.iNet endpoints over
-  `https://<unit>`. No module the glkvm-firmware project patches (Redfish,
-  OCR, VNC, port 8888, Prometheus export) is on a path this integration uses.
-  Two settings change what you see, both lines in the unit's
-  `/etc/kvmd/override.yaml`; Known limitations names them.
+- Stock firmware. Every call goes to stock kvmd and GL.iNet endpoints over `https://<unit>`. No module the glkvm-firmware project patches (Redfish, OCR, VNC, port 8888, Prometheus export) is on a path this integration uses. Two settings change what you see, both lines in the unit's `/etc/kvmd/override.yaml`; Known limitations names them.
 
 ## Installation
 
-HACS (custom repository): add this repository as a custom repository of type
-Integration, install, restart Home Assistant.
+HACS (custom repository): add this repository as a custom repository of type Integration, install, restart Home Assistant.
 
-Manual: copy `custom_components/glkvm/` into your Home Assistant
-`config/custom_components/` directory and restart.
+Manual: copy `custom_components/glkvm/` into your Home Assistant `config/custom_components/` directory and restart.
 
 Then Settings -> Devices & Services -> Add Integration -> GL.iNet KVM.
 
 ### Discovery
 
-Units on the same network as Home Assistant announce themselves over mDNS
-(`_glinet._tcp.local.`) and appear under Settings -> Devices & Services as a
-discovered device. Adding one that way asks only for the login and the
-certificate check; the address and port come from the announcement, and the
-serial the entry is keyed on is read from the unit once the login is
-accepted.
+Units on the same network as Home Assistant announce themselves over mDNS (`_glinet._tcp.local.`) and appear under Settings -> Devices & Services as a discovered device. Adding one that way asks only for the login and the certificate check; the address and port come from the announcement, and the serial the entry is keyed on is read from the unit once the login is accepted.
 
-The announcement carries the unit's MAC address, and Home Assistant stores
-it with the entry. That is what lets a unit that changes IP address, on a
-DHCP lease renewal or a move to another subnet, be recognised as the one you
-already have: the entry follows it to the new address instead of offering
-you a second copy of the same KVM. A unit added by hand gets its MAC stored
-at setup, so it is discoverable when it later moves.
+The announcement carries the unit's MAC address, and Home Assistant stores it with the entry. That is what lets a unit that changes IP address, on a DHCP lease renewal or a move to another subnet, be recognised as the one you already have: the entry follows it to the new address instead of offering you a second copy of the same KVM. A unit added by hand gets its MAC stored at setup, so it is discoverable when it later moves.
 
-If your network does not carry mDNS between Home Assistant and the unit, add
-it by address instead. Nothing else depends on discovery.
+If your network does not carry mDNS between Home Assistant and the unit, add it by address instead. Nothing else depends on discovery.
 
 ### Installation parameters
 
@@ -133,52 +100,25 @@ it by address instead. Nothing else depends on discovery.
 | Username, Password | The unit's login. Leave both empty if authentication is disabled on the unit. |
 | Verify the KVM's certificate | Off by default. The unit ships a self-signed certificate for `localhost`; turn this on only if you have installed your own. |
 
-Setup checks the credentials against the unit and reads its serial number
-before the entry is created, so a wrong password or a wrong address is caught
-on the form. The serial is the entry's unique id: adding a unit that is
-already configured updates its existing entry with the address, port and
-credentials you just entered instead of creating a second one. When the form
-comes back with an error, everything you typed is kept except the password.
+Setup checks the credentials against the unit and reads its serial number before the entry is created, so a wrong password or a wrong address is caught on the form. The serial is the entry's unique id: adding a unit that is already configured updates its existing entry with the address, port and credentials you just entered instead of creating a second one. When the form comes back with an error, everything you typed is kept except the password.
 
 ### Reconfiguring
 
-Settings -> Devices & Services -> GL.iNet KVM -> Reconfigure changes the
-address, port, credentials or certificate check. The address must still answer
-as the same unit, and a blank password keeps the current one. There are no
-options beyond these.
+Settings -> Devices & Services -> GL.iNet KVM -> Reconfigure changes the address, port, credentials or certificate check. The address must still answer as the same unit, and a blank password keeps the current one. There are no options beyond these.
 
-When the unit starts refusing the credentials, Home Assistant stops polling
-and asks for them again. It stops rather than retrying because GL.iNet's
-firmware locks the account after repeated failed logins. The new credentials
-are checked against the serial the entry was set up for: if a different KVM
-has been put at that address, the form says so rather than quietly handing
-this entry's device, entities and history to another unit.
+When the unit starts refusing the credentials, Home Assistant stops polling and asks for them again. It stops rather than retrying because GL.iNet's firmware locks the account after repeated failed logins. The new credentials are checked against the serial the entry was set up for: if a different KVM has been put at that address, the form says so rather than quietly handing this entry's device, entities and history to another unit.
 
 ### Removing it
 
-Settings -> Devices & Services -> GL.iNet KVM -> Delete. That removes the entry,
-its device and every entity. Nothing is written to the unit.
+Settings -> Devices & Services -> GL.iNet KVM -> Delete. That removes the entry, its device and every entity. Nothing is written to the unit.
 
 ## How it updates
 
-Every 30 seconds the integration reads the unit's ATX, virtual media, streamer,
-HID, GPIO, health and Wake-on-LAN state, each from its own endpoint. A single
-endpoint failing leaves the rest live and makes only the entities that read
-it unavailable, so a section the unit has stopped answering for shows as
-unavailable rather than as the value it last confirmed. Only the unit being
-unreachable for all seven marks everything unavailable. The camera fetches a
-frame when something asks for one.
+Every 30 seconds the integration reads the unit's ATX, virtual media, streamer, HID, GPIO, health and Wake-on-LAN state, each from its own endpoint. A single endpoint failing leaves the rest live and makes only the entities that read it unavailable, so a section the unit has stopped answering for shows as unavailable rather than as the value it last confirmed. Only the unit being unreachable for all seven marks everything unavailable. The camera fetches a frame when something asks for one.
 
-Two sets of entities follow the unit between polls. Wake buttons are created
-for targets added on the unit and removed from the entity registry for
-targets deleted there, including deletions made while Home Assistant was not
-running. The health sensors are created the first time the unit's health
-section answers, so a read that failed at startup does not hide them until
-the next reload.
+Two sets of entities follow the unit between polls. Wake buttons are created for targets added on the unit and removed from the entity registry for targets deleted there, including deletions made while Home Assistant was not running. The health sensors are created the first time the unit's health section answers, so a read that failed at startup does not hide them until the next reload.
 
-The interval is thirty seconds because host power, video signal and attached
-media change at human speed, and the unit's CPU belongs to its video encoder.
-The unit also carries the same state as a push stream over `/api/ws`.
+The interval is thirty seconds because host power, video signal and attached media change at human speed, and the unit's CPU belongs to its video encoder. The unit also carries the same state as a push stream over `/api/ws`.
 
 ## Examples
 
@@ -240,9 +180,7 @@ script:
           entity_id: button.rack_kvm_reset
 ```
 
-Log in to a console that has no network yet. This one is a script blueprint,
-so the KVM is picked when the script is created from it; `!input` only
-resolves inside a blueprint.
+Log in to a console that has no network yet. This one is a script blueprint, so the KVM is picked when the script is created from it; `!input` only resolves inside a blueprint.
 
 ```yaml
 blueprint:
@@ -269,37 +207,13 @@ sequence:
 
 ## Known limitations
 
-- The Screen camera is a still-image camera. kvmd serves the current frame
-  as a JPEG; GL.iNet's live path is WebRTC and its raw H.264 stream is not
-  something the camera platform can play. Cards refresh the still every two
-  seconds.
-- On stock firmware the camera has a picture only while GL.iNet's own web UI
-  is watching, otherwise it reports no image. Their firmware starts kvmd's
-  streamer on demand. Setting `kvmd: {streamer: {forever: true}}` in
-  `/etc/kvmd/override.yaml` on the unit keeps it running, so the still is
-  there at every refresh; a repair issue says so when the streamer has been
-  stopped for three polls.
-- Virtual media is offline on a stock 1.10.0 unit. That firmware ships the
-  mass-storage functions unlinked from the USB gadget. Enabling USB functions
-  in GL.iNet's own web UI fixes it without a shell (it writes the same keys to
-  the unit's `boot.yaml`); so does setting
-  `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` in
-  `override.yaml` and rebooting. A repair issue says so. Images smaller than
-  614,400 bytes are rejected by the unit's kernel.
-- Power control needs GL.iNet's ATX board. Without it the power switch and
-  the three buttons are unavailable, and the `power` action refuses.
-- Keyboard connected and Mouse connected are lazy. kvmd updates them on
-  the next successful write, so a host that has stopped polling the gadget
-  still reads connected until something is typed.
-- Authentication is per request. The unit accepts the credentials as
-  headers on every call. A unit with authentication disabled accepts whatever
-  you enter.
-- Discovery needs mDNS to reach Home Assistant. The announcement is
-  filtered on the model, so only Comet KVMs are offered; a unit on a segment
-  that does not forward mDNS has to be added by address. A unit whose entry
-  has no stored MAC yet is offered as a new device until its serial is read,
-  at which point it is recognised and its address updated rather than
-  duplicated.
+- The Screen camera is a still-image camera. kvmd serves the current frame as a JPEG; GL.iNet's live path is WebRTC and its raw H.264 stream is not something the camera platform can play. Cards refresh the still every two seconds.
+- On stock firmware the camera has a picture only while GL.iNet's own web UI is watching, otherwise it reports no image. Their firmware starts kvmd's streamer on demand. Setting `kvmd: {streamer: {forever: true}}` in `/etc/kvmd/override.yaml` on the unit keeps it running, so the still is there at every refresh; a repair issue says so when the streamer has been stopped for three polls.
+- Virtual media is offline on a stock 1.10.0 unit. That firmware ships the mass-storage functions unlinked from the USB gadget. Enabling USB functions in GL.iNet's own web UI fixes it without a shell (it writes the same keys to the unit's `boot.yaml`); so does setting `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` in `override.yaml` and rebooting. A repair issue says so. Images smaller than 614,400 bytes are rejected by the unit's kernel.
+- Power control needs GL.iNet's ATX board. Without it the power switch and the three buttons are unavailable, and the `power` action refuses.
+- Keyboard connected and Mouse connected are lazy. kvmd updates them on the next successful write, so a host that has stopped polling the gadget still reads connected until something is typed.
+- Authentication is per request. The unit accepts the credentials as headers on every call. A unit with authentication disabled accepts whatever you enter.
+- Discovery needs mDNS to reach Home Assistant. The announcement is filtered on the model, so only Comet KVMs are offered; a unit on a segment that does not forward mDNS has to be added by address. A unit whose entry has no stored MAC yet is offered as a new device until its serial is read, at which point it is recognised and its address updated rather than duplicated.
 
 ## Troubleshooting
 
@@ -325,36 +239,14 @@ logger:
     custom_components.glkvm: debug
 ```
 
-Download diagnostics from the device page for a report with the host, serial,
-credentials, every MAC and IP address, every Wake-on-LAN target name and every
-user-GPIO channel name redacted. Stored image filenames are left in clear.
+Download diagnostics from the device page for a report with the host, serial, credentials, every MAC and IP address, every Wake-on-LAN target name and every user-GPIO channel name redacted. Stored image filenames are left in clear.
 
 ## Development
 
-- `custom_components/glkvm/api.py` and `models.py` import nothing from Home
-  Assistant. `tests/test_api.py` and `tests/test_models.py` load them by path
-  and run on a bare interpreter against `tests/fixtures/`, which are the
-  bodies a real GL-RM10 sent, with its serial, hostname and the household's
-  MAC and IP addresses replaced.
-- `tests/ha/` covers the Home Assistant layer with the client replaced by a
-  fake that answers from the same fixtures. The GitHub `Tests` workflow runs
-  it on every push against Home Assistant 2026.8.3
-  (pytest-homeassistant-custom-component 0.13.357) on Python 3.14, with mypy
-  in strict mode and both suites measured into one coverage figure that fails
-  the job under 95%. The suite skips where the Home Assistant test harness is
-  absent. On Windows `tests/winposix.py`, loaded by `-p tests.winposix` from
-  `pyproject.toml`, supplies the POSIX modules Home Assistant imports and the
-  two shims its event loop needs, so both suites run there too.
-- `python tools/validate_local.py` is the offline half of the hassfest and
-  HACS checks plus every cross-file consistency check, including a scan for
-  user-facing exceptions raised without a translation key. Its published-tree
-  scan reads every file git lists except the binary suffixes, and refuses
-  private IPv4 and IPv6 address literals, private-suffix and dotless URL
-  hosts, and any host name listed in `HA_DEV_HOST_NAMES`, comma separated. The
-  forge job supplies that list from a secret. The GitHub job does not, because
-  the failure line prints the name it matched.
-- `python tools/make_brand.py` regenerates the brand images and checks their
-  sizes, transparency and fill.
+- `custom_components/glkvm/api.py` and `models.py` import nothing from Home Assistant. `tests/test_api.py` and `tests/test_models.py` load them by path and run on a bare interpreter against `tests/fixtures/`, which are the bodies a real GL-RM10 sent, with its serial, hostname and the household's MAC and IP addresses replaced.
+- `tests/ha/` covers the Home Assistant layer with the client replaced by a fake that answers from the same fixtures. The GitHub `Tests` workflow runs it on every push against Home Assistant 2026.8.3 (pytest-homeassistant-custom-component 0.13.357) on Python 3.14, with mypy in strict mode and both suites measured into one coverage figure that fails the job under 95%. The suite skips where the Home Assistant test harness is absent. On Windows `tests/winposix.py`, loaded by `-p tests.winposix` from `pyproject.toml`, supplies the POSIX modules Home Assistant imports and the two shims its event loop needs, so both suites run there too.
+- `python tools/validate_local.py` is the offline half of the hassfest and HACS checks plus every cross-file consistency check, including a scan for user-facing exceptions raised without a translation key. Its published-tree scan reads every file git lists except the binary suffixes, and refuses private IPv4 and IPv6 address literals, private-suffix and dotless URL hosts, and any host name listed in `HA_DEV_HOST_NAMES`, comma separated. The forge job supplies that list from a secret. The GitHub job does not, because the failure line prints the name it matched.
+- `python tools/make_brand.py` regenerates the brand images and checks their sizes, transparency and fill.
 
 ```bash
 python -m pytest tests/ -q
@@ -363,19 +255,11 @@ python -m mypy custom_components/glkvm
 python tools/validate_local.py
 ```
 
-The firmware work this was built on, including the provisioning that fixes the
-two stock-firmware limitations above, lives in the `glkvm-firmware` repository.
+The firmware work this was built on, including the provisioning that fixes the two stock-firmware limitations above, lives in the `glkvm-firmware` repository.
 
 ## Quality scale
 
-Built to Home Assistant's Integration Quality Scale, tracked rule by rule in
-[`quality_scale.yaml`](custom_components/glkvm/quality_scale.yaml). All 54
-rules are met; the six that do not apply here are marked `exempt` with the
-reason written out. `tools/validate_local.py` checks the file against the
-pinned rule list, so a rule that is simply missing fails rather than reading
-as complete, and it refuses a rule marked `done` that the rest of the
-repository contradicts. The scale is a core-integration concept; a custom
-integration builds to the rules and is not scored.
+Built to Home Assistant's Integration Quality Scale, tracked rule by rule in [`quality_scale.yaml`](custom_components/glkvm/quality_scale.yaml). All 54 rules are met; the six that do not apply here are marked `exempt` with the reason written out. `tools/validate_local.py` checks the file against the pinned rule list, so a rule that is simply missing fails rather than reading as complete, and it refuses a rule marked `done` that the rest of the repository contradicts. The scale is a core-integration concept; a custom integration builds to the rules and is not scored.
 
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
