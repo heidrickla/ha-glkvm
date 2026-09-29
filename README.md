@@ -16,8 +16,8 @@ own web interface uses.
 | Screen | camera | The current capture frame as a still image. |
 | Video signal | binary sensor | Whether the host is putting out video on HDMI. |
 | Capture resolution, Capture frame rate | sensor | What the unit is capturing right now. |
-| Virtual media attached | switch | Whether the selected image is plugged into the host as a USB drive. |
-| Virtual media image | select | Which stored image the drive presents. |
+| Virtual media attached | switch | Whether the selected image is plugged into the host as a USB drive. Turning it on with no image selected is refused. |
+| Virtual media image | select | Which stored image the drive presents. Changing it while attached is refused; detach first. |
 | Media storage free | sensor | Space left on the unit's media partition. |
 | Keyboard connected, Mouse connected | binary sensor | Whether the host is talking to each half of the USB gadget. |
 | Mouse jiggler | switch | kvmd's jiggler, which keeps the host awake. On means it is running; unavailable when the unit's configuration disables it. |
@@ -71,11 +71,11 @@ has no ATX board.
 
 ## Supported devices
 
-| Device | Firmware | Status |
+| Device | Firmware | Notes |
 |---|---|---|
-| GL-RM10 Comet Pro | 1.10.0 | Verified: every entity and action was built against recorded answers from this unit. |
-| GL-RM10 Comet Pro | 1.8.1 | Expected to work without the health sensors: that firmware has no `health` section, and a test covers an answer shaped that way. No 1.8.1 unit has been run against the integration as of 2026-09-15. |
-| GL-RM1 Comet | any | Same kvmd fork and API. No GL-RM1 has been run against the integration as of 2026-09-15. |
+| GL-RM10 Comet Pro | 1.10.0 | Every entity and action is built against recorded answers from this unit. |
+| GL-RM10 Comet Pro | 1.8.1 | No health sensors: that firmware has no `health` section, and a test covers an answer shaped that way. |
+| GL-RM1 Comet | any | Same kvmd fork and API. |
 
 The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not
 a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the
@@ -89,13 +89,11 @@ Wake-on-LAN list), and degrades where they are absent rather than guessing.
   nothing newer than 2025.4.
 - A GL.iNet KVM reachable from Home Assistant on your LAN, by IP address.
 - Its login, unless you have disabled authentication on the unit.
-- No custom firmware. Every call goes to stock kvmd and GL.iNet endpoints
-  over `https://<unit>`, and no module the glkvm-firmware project patches is
-  on a path this integration uses: no Redfish, no OCR, no VNC, no port 8888,
-  no Prometheus export. The unit it was verified against runs that project's
-  provisioned 1.10.0 image. Two of its settings change what you see, both
-  lines in the unit's `/etc/kvmd/override.yaml` rather than anything in the
-  image; known limitations names them.
+- Stock firmware. Every call goes to stock kvmd and GL.iNet endpoints over
+  `https://<unit>`. No module the glkvm-firmware project patches (Redfish,
+  OCR, VNC, port 8888, Prometheus export) is on a path this integration uses.
+  Two settings change what you see, both lines in the unit's
+  `/etc/kvmd/override.yaml`; Known limitations names them.
 
 ## Installation
 
@@ -299,9 +297,9 @@ sequence:
 - Discovery needs mDNS to reach Home Assistant. The announcement is
   filtered on the model, so only Comet KVMs are offered; a unit on a segment
   that does not forward mDNS has to be added by address. A unit whose entry
-  has no stored MAC yet, because it was added before this version, is offered
-  as a new device until its serial is read, at which point it is recognised
-  and its address updated rather than duplicated.
+  has no stored MAC yet is offered as a new device until its serial is read,
+  at which point it is recognised and its address updated rather than
+  duplicated.
 
 ## Troubleshooting
 
@@ -340,14 +338,13 @@ user-GPIO channel name redacted. Stored image filenames are left in clear.
   MAC and IP addresses replaced.
 - `tests/ha/` covers the Home Assistant layer with the client replaced by a
   fake that answers from the same fixtures. The GitHub `Tests` workflow runs
-  it on every push against a pinned Home Assistant release, with mypy in
-  strict mode and both suites measured into one coverage figure that fails
+  it on every push against Home Assistant 2026.8.3
+  (pytest-homeassistant-custom-component 0.13.357) on Python 3.14, with mypy
+  in strict mode and both suites measured into one coverage figure that fails
   the job under 95%. The suite skips where the Home Assistant test harness is
   absent. On Windows `tests/winposix.py`, loaded by `-p tests.winposix` from
   `pyproject.toml`, supplies the POSIX modules Home Assistant imports and the
-  two shims its event loop needs. Both suites, 150 tests, passed on Windows 11
-  with Python 3.14.7, Home Assistant 2026.8.3 and
-  pytest-homeassistant-custom-component 0.13.357 on 2026-09-16.
+  two shims its event loop needs, so both suites run there too.
 - `python tools/validate_local.py` is the offline half of the hassfest and
   HACS checks plus every cross-file consistency check, including a scan for
   user-facing exceptions raised without a translation key. Its published-tree

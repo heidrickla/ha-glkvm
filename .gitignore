@@ -13,3 +13,10 @@ htmlcov/
 dist/
 build/
 .DS_Store
+
+# Agent instruction files and per-checkout agent settings never ship.
+.claude/
+CLAUDE.md
+AGENTS.md
+CONTRIBUTING.md
+.cursorrules
