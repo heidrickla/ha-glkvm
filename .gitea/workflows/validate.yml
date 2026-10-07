@@ -15,15 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        timeout-minutes: 15
 
       # Pinned: an unpinned linter makes CI non-reproducible.
       - name: Install ruff (PINNED)
+        timeout-minutes: 15
         run: |
           python3 -m pip install --quiet --upgrade pip
           python3 -m pip install --quiet "ruff==0.15.21"
           python3 -m ruff --version
 
       - name: Ruff
+        timeout-minutes: 15
         run: |
           python3 -m ruff check .
           python3 -m ruff format --check .
@@ -33,6 +36,7 @@ jobs:
       # interpreter cannot parse. Ruff already parses every file at py314, and
       # tools/validate_local.py runs in the job below.
       - name: JSON is valid
+        timeout-minutes: 15
         run: |
           for f in custom_components/glkvm/*.json custom_components/glkvm/translations/*.json hacs.json; do
             python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$f" || exit 1
@@ -40,6 +44,7 @@ jobs:
           echo "all JSON valid"
 
       - name: Manifest sanity
+        timeout-minutes: 15
         run: |
           python3 - <<'PY'
           import json
@@ -54,6 +59,7 @@ jobs:
           PY
 
       - name: Quality scale is complete and honest
+        timeout-minutes: 15
         run: |
           python3 -m pip install --quiet "PyYAML==6.0.2"
           python3 - <<'PY'
@@ -84,12 +90,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        timeout-minutes: 15
 
       # The default python3 in this job is 3.10. Home Assistant 2026.x needs
       # 3.14: with 3.13 here, pip silently resolves the newest test package
       # that still supports 3.13, which is an old Home Assistant, and a pinned
       # current one cannot be found at all.
       - uses: actions/setup-python@v5
+        timeout-minutes: 15
         with:
           python-version: "3.14"
 
@@ -101,6 +109,7 @@ jobs:
       # pytest-homeassistant-custom-component pins Home Assistant exactly;
       # 0.13.357 is Home Assistant 2026.8.3, the version this was verified on.
       - name: Install
+        timeout-minutes: 15
         run: |
           python -m venv .venv-pure
           .venv-pure/bin/python -m pip install --quiet --upgrade pip
@@ -122,19 +131,22 @@ jobs:
       # Only pytest and aiohttp exist in this environment, so a Home Assistant
       # import creeping into api.py or models.py fails this step by itself.
       - name: Pure tests (client + models, no Home Assistant)
-        run: .venv-pure/bin/python -m pytest tests/test_models.py tests/test_api.py
+        timeout-minutes: 15
+        run: .venv-pure/bin/python -m pytest --durations=15 --junitxml=reports/junit-1.xml tests/test_models.py tests/test_api.py
 
       # The gate is on both suites together; see .github/workflows/tests.yml.
       # The pure run here is in the other virtual environment, which has no
       # pytest-cov, so this one measures both suites itself.
       - name: Home Assistant layer tests
+        timeout-minutes: 15
         run: |
-          .venv/bin/python -m pytest tests/test_models.py tests/test_api.py \
+          .venv/bin/python -m pytest --durations=15 --junitxml=reports/junit-2.xml tests/test_models.py tests/test_api.py \
             -p no:homeassistant --cov=custom_components/glkvm --cov-report=
-          .venv/bin/python -m pytest tests/ha --cov=custom_components/glkvm \
+          .venv/bin/python -m pytest --durations=15 --junitxml=reports/junit-3.xml tests/ha --cov=custom_components/glkvm \
             --cov-append --cov-report=term-missing --cov-fail-under=95
 
       - name: mypy strict
+        timeout-minutes: 15
         run: .venv/bin/python -m mypy custom_components/glkvm
 
       # The name half of the tree scan is the only rule that reaches a
@@ -145,9 +157,20 @@ jobs:
       # prints the name it matched and that job's log is public. Unset, the
       # run reports 0 names and the address and suffix rules still apply.
       - name: Offline HACS and hassfest checks
+        timeout-minutes: 15
         env:
           HA_DEV_HOST_NAMES: ${{ secrets.HA_DEV_HOST_NAMES }}
         run: .venv/bin/python tools/validate_local.py
+
+      # each test's time and result, kept whatever the outcome: the forge shows no job log
+      - name: test results
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3.2.1
+        with:
+          name: test-results-${{ github.job }}
+          path: reports/
+          retention-days: 14
 
   # hacs/action reads the repository through the GitHub API, so it cannot
   # check this tree here; .github/workflows/validate.yml runs it on GitHub.
@@ -157,4 +180,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        timeout-minutes: 15
       - uses: home-assistant/actions/hassfest@master
+        timeout-minutes: 15
