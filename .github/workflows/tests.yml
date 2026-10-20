@@ -11,7 +11,7 @@ on:
 jobs:
   tests:
     if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
       # Home Assistant 2026.x needs Python 3.14.
