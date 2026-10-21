@@ -16,37 +16,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         timeout-minutes: 15
+      - uses: actions/setup-python@v5
+        timeout-minutes: 15
+        with:
+          python-version: "3.14"
 
+      # A venv of the job's own: the image's Python is externally managed, and
+      # the runner's toolcache Python carries other repos' packages.
       # Pinned: an unpinned linter makes CI non-reproducible.
-      - name: Install ruff (PINNED)
+      - name: Install ruff and PyYAML (PINNED)
         timeout-minutes: 15
         run: |
-          python3 -m pip install --quiet --upgrade pip
-          python3 -m pip install --quiet "ruff==0.15.21"
-          python3 -m ruff --version
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet "ruff==0.15.21" "PyYAML==6.0.2"
+          "$RUNNER_TEMP/venv/bin/python" -m ruff --version
 
       - name: Ruff
         timeout-minutes: 15
         run: |
-          python3 -m ruff check .
-          python3 -m ruff format --check .
+          "$RUNNER_TEMP/venv/bin/python" -m ruff check .
+          "$RUNNER_TEMP/venv/bin/python" -m ruff format --check .
 
-      # No ast.parse step here on purpose. The default python3 in this job is
-      # 3.10.12 and this integration uses PEP 695 `type X = ...`, which that
-      # interpreter cannot parse. Ruff already parses every file at py314, and
-      # tools/validate_local.py runs in the job below.
       - name: JSON is valid
         timeout-minutes: 15
         run: |
           for f in custom_components/glkvm/*.json custom_components/glkvm/translations/*.json hacs.json; do
-            python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$f" || exit 1
+            "$RUNNER_TEMP/venv/bin/python" -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$f" || exit 1
           done
           echo "all JSON valid"
 
       - name: Manifest sanity
         timeout-minutes: 15
         run: |
-          python3 - <<'PY'
+          "$RUNNER_TEMP/venv/bin/python" - <<'PY'
           import json
           m = json.load(open("custom_components/glkvm/manifest.json", encoding="utf-8"))
           missing = [k for k in ("domain","name","version","documentation","codeowners") if not m.get(k)]
@@ -61,8 +63,7 @@ jobs:
       - name: Quality scale is complete and honest
         timeout-minutes: 15
         run: |
-          python3 -m pip install --quiet "PyYAML==6.0.2"
-          python3 - <<'PY'
+          "$RUNNER_TEMP/venv/bin/python" - <<'PY'
           import json, yaml
           rules = yaml.safe_load(open(
               "custom_components/glkvm/quality_scale.yaml", encoding="utf-8"))["rules"]
@@ -92,10 +93,9 @@ jobs:
       - uses: actions/checkout@v4
         timeout-minutes: 15
 
-      # The default python3 in this job is 3.10. Home Assistant 2026.x needs
-      # 3.14: with 3.13 here, pip silently resolves the newest test package
-      # that still supports 3.13, which is an old Home Assistant, and a pinned
-      # current one cannot be found at all.
+      # Home Assistant 2026.x needs 3.14: with an older Python, pip silently
+      # resolves the newest test package that still supports it, which is an
+      # old Home Assistant, and a pinned current one cannot be found at all.
       - uses: actions/setup-python@v5
         timeout-minutes: 15
         with:
