@@ -115,8 +115,12 @@ class FakeClient:
     calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = field(
         default_factory=list
     )
+    # Every credentialed read attempted, in order, whether or not it failed.
+    reads: list[str] = field(default_factory=list)
 
     def _check(self, read: str | None = None) -> None:
+        if read is not None:
+            self.reads.append(read)
         if self.fail is not None:
             raise self.fail
         if read is not None and read in self.read_fail:
@@ -131,7 +135,7 @@ class FakeClient:
 
     # reads
     async def check_auth(self) -> None:
-        self._check()
+        self._check("check_auth")
 
     async def get_system(self) -> SystemInfo:
         self._check("system")

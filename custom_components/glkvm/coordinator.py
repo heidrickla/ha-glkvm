@@ -164,6 +164,20 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             return None
 
         client = self.client
+        # One credential check before the concurrent reads, so a changed
+        # password costs one failed login towards GL.iNet's lockout, not seven.
+        # Any other failure here is left to the section reads to report.
+        try:
+            await client.check_auth()
+        except GlkvmAuthError as err:
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        except GlkvmError as err:
+            _LOGGER.debug("Credential check failed: %s", err)
+
         # Six in the gather and one after: typeshed types gather for up to six
         # positional awaitables, and a seventh collapses the result to a union.
         atx, msd, streamer, hid, gpio, health = await asyncio.gather(

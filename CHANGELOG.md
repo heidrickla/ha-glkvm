@@ -8,6 +8,7 @@ Everything a user of this integration would notice, newest first. The format fol
 
 - The four actions (`type_text`, `send_keys`, `wake`, `power`) are administrator actions. A non-administrator's call is refused with Home Assistant's own unauthorized error; automations and scripts are unaffected.
 - The switches, buttons and selects answer administrators only: host power, the ATX and keyboard-reset buttons, virtual media and its image, the mouse jiggler and mouse mode, GPIO outputs and Wake-on-LAN. A press from a non-administrator is refused; automations and scripts are unaffected.
+- Each poll checks the credentials once before its concurrent reads. After the unit's password changes, a poll costs one failed login towards GL.iNet's lockout, then polling stops and Home Assistant asks for the new password.
 
 ## [0.2.1] - 2026-09-15
 

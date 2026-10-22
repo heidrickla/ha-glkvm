@@ -145,6 +145,19 @@ async def test_a_401_on_a_later_poll_starts_reauth(hass, fake_client, config_ent
     assert hass.states.get("switch.kvm_host_power").state == "unavailable"
 
 
+async def test_a_changed_password_costs_one_failed_login_per_poll(
+    hass, fake_client, config_entry
+):
+    # GL.iNet counts each refused request towards its login lockout, so the
+    # poll checks the credentials once before its concurrent section reads.
+    await setup_entry(hass, config_entry)
+    fake_client.fail = GlkvmAuthError("password changed")
+    fake_client.reads.clear()
+    await _poll(hass, config_entry)
+    assert fake_client.reads == ["check_auth"]
+    assert _reauth_in_progress(hass)
+
+
 async def test_losing_the_unit_marks_entities_unavailable_then_recovers(
     hass, fake_client, config_entry
 ):
