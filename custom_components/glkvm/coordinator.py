@@ -22,6 +22,7 @@ from .api import (
     GlkvmError,
 )
 from .const import (
+    CONF_CERT_SHA256,
     DOMAIN,
     ISSUE_MSD_OFFLINE,
     ISSUE_STREAMER_STOPPED,
@@ -122,6 +123,24 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             # its state reads but not /api/info still works.
             _LOGGER.debug("Could not read identity: %s", err)
         await self._async_refresh_mac()
+        await self._async_refresh_certificate()
+
+    async def _async_refresh_certificate(self) -> None:
+        """Keep the certificate the unit presents in entry data.
+
+        Zeroconf moves the entry to a new address only when that address
+        presents the same certificate. Read at every setup, so a certificate
+        the unit regenerates is picked up at the address already trusted.
+        """
+        try:
+            digest = await self.client.get_certificate_sha256()
+        except GlkvmError as err:
+            _LOGGER.debug("Could not read the unit's certificate: %s", err)
+            return
+        if digest != self._entry.data.get(CONF_CERT_SHA256):
+            self.hass.config_entries.async_update_entry(
+                self._entry, data={**self._entry.data, CONF_CERT_SHA256: digest}
+            )
 
     async def _async_refresh_mac(self) -> None:
         """Keep the unit's own MAC in entry data, for zeroconf to match on.

@@ -427,6 +427,8 @@ async def test_diagnostics_redact_what_identifies_the_household(
     diag = await async_get_config_entry_diagnostics(hass, config_entry)
     assert diag["config"]["host"] == "**REDACTED**"
     assert diag["config"]["password"] == "**REDACTED**"
+    # The stored certificate digest identifies the unit as its serial does.
+    assert diag["config"]["cert_sha256"] == "**REDACTED**"
     assert diag["system"]["serial"] == "**REDACTED**"
     assert diag["data"]["wol"][0]["mac"] == "**REDACTED**"
     assert diag["data"]["wol"][0]["ip"] == "**REDACTED**"

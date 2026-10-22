@@ -26,9 +26,16 @@ from custom_components.glkvm.api import (
     GlkvmResponseError,
 )
 from custom_components.glkvm.config_flow import mac_from_txt, normalise_mac
-from custom_components.glkvm.const import DOMAIN
+from custom_components.glkvm.const import CONF_CERT_SHA256, DOMAIN
 
-from .conftest import ENTRY_DATA, HOST, SERIAL, UNIT_MAC, UNIT_MAC_TXT
+from .conftest import (
+    ENTRY_DATA,
+    HOST,
+    SERIAL,
+    UNIT_CERT_SHA256,
+    UNIT_MAC,
+    UNIT_MAC_TXT,
+)
 
 
 def _field(schema, name):
@@ -244,20 +251,83 @@ async def test_an_announcement_with_no_readable_mac_is_dropped(hass, fake_client
     assert result["reason"] == "no_mac"
 
 
+def _known(hass, config_entry, **data):
+    """The entry as a loaded unit leaves it: its MAC and certificate stored."""
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        config_entry,
+        data={
+            **config_entry.data,
+            CONF_MAC: UNIT_MAC,
+            CONF_CERT_SHA256: UNIT_CERT_SHA256,
+            **data,
+        },
+    )
+
+
 async def test_a_known_unit_that_moved_is_followed_to_its_new_address(
     hass, fake_client, config_entry
 ):
     # discovery-update-info: the entry keeps its identity and its history and
     # is polled at the address the unit is answering on now.
-    config_entry.add_to_hass(hass)
-    hass.config_entries.async_update_entry(
-        config_entry, data={**config_entry.data, CONF_MAC: UNIT_MAC}
-    )
+    _known(hass, config_entry)
     result = await _discover(hass)
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert config_entry.data[CONF_HOST] == "192.0.2.30"
+    # The new address proved it is the same unit before the entry moved; the
+    # reads after these two are the reload at the new address.
     await hass.async_block_till_done()
+    assert fake_client.reads[:2] == ["check_auth", "system"]
+
+
+async def test_an_announcer_without_the_units_certificate_gets_no_credentials(
+    hass, fake_client, config_entry
+):
+    # Anything on the LAN can announce the unit's MAC. Without the private key
+    # of the certificate the unit presented, the pinned connection fails
+    # before a request, and the credentials in it, is sent.
+    _known(hass, config_entry)
+    fake_client.cert_sha256 = "00" * 32
+    result = await _discover(hass)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == HOST
+    assert fake_client.reads == []
+
+
+async def test_a_unit_at_the_new_address_with_another_serial_is_not_followed(
+    hass, fake_client, config_entry
+):
+    _known(hass, config_entry)
+    fake_client.system = replace(fake_client.system, serial="FEDCBA9876543210")
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == HOST
+
+
+async def test_a_new_address_that_refuses_the_login_is_not_followed(
+    hass, fake_client, config_entry
+):
+    _known(hass, config_entry)
+    fake_client.fail = GlkvmAuthError("no")
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == HOST
+
+
+@pytest.mark.parametrize("stored", [None, "", "zz" * 32, "5f" * 31])
+async def test_without_a_stored_certificate_the_entry_stays_put(
+    hass, fake_client, config_entry, stored
+):
+    # An entry that has not loaded since the certificate was stored has
+    # nothing to check the new address against; it keeps its address until
+    # its next setup stores one.
+    _known(hass, config_entry, **{CONF_CERT_SHA256: stored})
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == HOST
+    assert fake_client.reads == []
 
 
 async def test_a_known_unit_at_the_address_it_already_has_changes_nothing(

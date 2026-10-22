@@ -37,6 +37,7 @@ from homeassistant.const import (
 )
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.glkvm.api import GlkvmConnectionError
 from custom_components.glkvm.const import DOMAIN
 from custom_components.glkvm.models import (
     AtxState,
@@ -59,6 +60,8 @@ WOL_MAC = "02:00:00:00:00:01"
 # mDNS TXT record carries it (base64 of the twelve hex digits).
 UNIT_MAC = "94:83:c4:00:02:15"
 UNIT_MAC_TXT = "OTQ4M2M0MDAwMjE1"
+# SHA-256 of the certificate the unit presents, as the entry stores it.
+UNIT_CERT_SHA256 = "5f" * 32
 
 ENTRY_DATA = {
     CONF_HOST: HOST,
@@ -107,6 +110,9 @@ class FakeClient:
         default_factory=lambda: NetworkConfig.from_result(result("network_config.json"))
     )
     snapshot: bytes | None = b"\xff\xd8\xff\xe0jpeg"
+    # The certificate whatever answers presents. A client built pinned to
+    # another one fails before any request: see fake_client below.
+    cert_sha256: str = UNIT_CERT_SHA256
     # When set, every call raises it - the way a whole unit fails.
     fail: Exception | None = None
     # One read at a time, keyed by the name below - the way a single endpoint
@@ -134,6 +140,10 @@ class FakeClient:
         return [name for name, _args, _kwargs in self.calls]
 
     # reads
+    async def get_certificate_sha256(self) -> str:
+        self._check("certificate")
+        return self.cert_sha256
+
     async def check_auth(self) -> None:
         self._check("check_auth")
 
@@ -231,14 +241,32 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     return
 
 
+class MismatchedCertificateClient:
+    """A client pinned to a certificate the address does not present.
+
+    aiohttp refuses such a connection before the request is written, so
+    every call fails and nothing reaches the unit.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        async def refuse(*_args: Any, **_kwargs: Any) -> None:
+            raise GlkvmConnectionError(f"{name}: certificate fingerprint mismatch")
+
+        return refuse
+
+
 @pytest.fixture
 def fake_client(monkeypatch) -> FakeClient:
     """Replace the real client wherever it is constructed."""
     fake = FakeClient()
-    monkeypatch.setattr("custom_components.glkvm.GlkvmClient", lambda *a, **k: fake)
-    monkeypatch.setattr(
-        "custom_components.glkvm.config_flow.GlkvmClient", lambda *a, **k: fake
-    )
+
+    def client(*_args: Any, cert_sha256: str | None = None, **_kwargs: Any) -> Any:
+        if cert_sha256 is not None and cert_sha256 != fake.cert_sha256:
+            return MismatchedCertificateClient()
+        return fake
+
+    monkeypatch.setattr("custom_components.glkvm.GlkvmClient", client)
+    monkeypatch.setattr("custom_components.glkvm.config_flow.GlkvmClient", client)
     return fake
 
 

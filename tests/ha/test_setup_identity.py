@@ -12,11 +12,11 @@ from homeassistant.const import CONF_MAC
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.glkvm.api import GlkvmResponseError
-from custom_components.glkvm.const import DOMAIN
+from custom_components.glkvm.api import GlkvmConnectionError, GlkvmResponseError
+from custom_components.glkvm.const import CONF_CERT_SHA256, DOMAIN
 from custom_components.glkvm.models import NetworkConfig
 
-from .conftest import ENTRY_DATA, SERIAL, UNIT_MAC, setup_entry
+from .conftest import ENTRY_DATA, SERIAL, UNIT_CERT_SHA256, UNIT_MAC, setup_entry
 
 
 async def test_the_identity_read_failing_does_not_stop_the_entry(
@@ -100,3 +100,33 @@ async def test_a_network_config_without_a_mac_stores_nothing(
     fake_client.network = NetworkConfig(ip="192.0.2.15")
     await setup_entry(hass, config_entry)
     assert CONF_MAC not in config_entry.data
+
+
+# ----------------------------------------------------- the unit certificate
+
+
+async def test_setup_stores_the_certificate_the_unit_presents(
+    hass, fake_client, config_entry
+):
+    assert CONF_CERT_SHA256 not in config_entry.data
+    await setup_entry(hass, config_entry)
+    assert config_entry.data[CONF_CERT_SHA256] == UNIT_CERT_SHA256
+
+
+async def test_setup_refreshes_a_certificate_the_unit_regenerated(
+    hass, fake_client, config_entry
+):
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        config_entry, data={**config_entry.data, CONF_CERT_SHA256: "00" * 32}
+    )
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert config_entry.data[CONF_CERT_SHA256] == UNIT_CERT_SHA256
+
+
+async def test_a_failed_certificate_read_still_sets_up(hass, fake_client, config_entry):
+    fake_client.read_fail["certificate"] = GlkvmConnectionError("handshake")
+    await setup_entry(hass, config_entry)
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert CONF_CERT_SHA256 not in config_entry.data

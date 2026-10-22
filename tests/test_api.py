@@ -8,6 +8,7 @@ actually says.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 
 import aiohttp
@@ -91,6 +92,80 @@ def test_verify_ssl_is_passed_through_to_aiohttp():
     _run(_client(session, verify_ssl=True).check_auth())
     assert session.calls[0]["ssl"] is False
     assert session.calls[1]["ssl"] is True
+
+
+def test_a_pinned_certificate_is_checked_by_aiohttp_on_every_request():
+    pin = hashlib.sha256(b"unit certificate").hexdigest()
+    session = _Session([_json("auth_check.json")])
+    _run(_client(session, cert_sha256=pin).check_auth())
+    ssl = session.calls[0]["ssl"]
+    assert isinstance(ssl, aiohttp.Fingerprint)
+    assert ssl.fingerprint == bytes.fromhex(pin)
+
+
+def test_a_fingerprint_mismatch_is_a_connection_error():
+    mismatch = aiohttp.ServerFingerprintMismatch(b"a" * 32, b"b" * 32, "host", 443)
+    session = _Session([mismatch])
+    with pytest.raises(api.GlkvmConnectionError):
+        _run(_client(session, cert_sha256="ab" * 32).check_auth())
+
+
+class _Writer:
+    def __init__(self, der: bytes | None) -> None:
+        self._der = der
+        self.closed = False
+
+    def get_extra_info(self, name: str):
+        assert name == "ssl_object"
+        der = self._der
+
+        class _SslObject:
+            def getpeercert(self, binary_form: bool = False):
+                assert binary_form
+                return der
+
+        return _SslObject()
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def wait_closed(self) -> None:
+        return None
+
+
+def test_the_certificate_digest_is_read_from_a_bare_handshake(monkeypatch):
+    der = b"unit certificate"
+    writer = _Writer(der)
+    seen: dict = {}
+
+    async def open_connection(host, port, *, ssl):
+        seen.update(host=host, port=port, ssl=ssl)
+        return object(), writer
+
+    monkeypatch.setattr(asyncio, "open_connection", open_connection)
+    session = _Session([])
+    digest = _run(_client(session, port=8443).get_certificate_sha256())
+    assert digest == hashlib.sha256(der).hexdigest()
+    assert (seen["host"], seen["port"]) == ("192.0.2.15", 8443)
+    # A TLS handshake and nothing else: no HTTP request, so no credentials.
+    assert session.calls == []
+    assert writer.closed
+
+
+def test_a_failed_or_empty_handshake_is_a_connection_error(monkeypatch):
+    async def refused(host, port, *, ssl):
+        raise ConnectionRefusedError("refused")
+
+    monkeypatch.setattr(asyncio, "open_connection", refused)
+    with pytest.raises(api.GlkvmConnectionError):
+        _run(_client(_Session([])).get_certificate_sha256())
+
+    async def no_certificate(host, port, *, ssl):
+        return object(), _Writer(None)
+
+    monkeypatch.setattr(asyncio, "open_connection", no_certificate)
+    with pytest.raises(api.GlkvmConnectionError):
+        _run(_client(_Session([])).get_certificate_sha256())
 
 
 def test_a_401_is_an_auth_error():

@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from typing import Any, override
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import (
     CONF_HOST,
     CONF_MAC,
@@ -30,7 +30,14 @@ from .api import (
     GlkvmConnectionError,
     GlkvmError,
 )
-from .const import DEFAULT_PORT, DEFAULT_VERIFY_SSL, DOMAIN, NAME, ZEROCONF_MAC
+from .const import (
+    CONF_CERT_SHA256,
+    DEFAULT_PORT,
+    DEFAULT_VERIFY_SSL,
+    DOMAIN,
+    NAME,
+    ZEROCONF_MAC,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,7 +70,9 @@ def mac_from_txt(value: Any) -> str | None:
     return normalise_mac(decoded)
 
 
-def _client(hass: HomeAssistant, data: Mapping[str, Any]) -> GlkvmClient:
+def _client(
+    hass: HomeAssistant, data: Mapping[str, Any], *, cert_sha256: str | None = None
+) -> GlkvmClient:
     verify_ssl = bool(data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL))
     return GlkvmClient(
         async_get_clientsession(hass, verify_ssl=verify_ssl),
@@ -72,7 +81,39 @@ def _client(hass: HomeAssistant, data: Mapping[str, Any]) -> GlkvmClient:
         username=data.get(CONF_USERNAME) or None,
         password=data.get(CONF_PASSWORD) or None,
         verify_ssl=verify_ssl,
+        cert_sha256=cert_sha256,
     )
+
+
+def _pinned_certificate(entry: ConfigEntry) -> str | None:
+    """The certificate digest stored with the entry, if it is a usable one."""
+    value = entry.data.get(CONF_CERT_SHA256)
+    if not isinstance(value, str) or len(value) != 64:
+        return None
+    if not all(c in string.hexdigits for c in value):
+        return None
+    return value.lower()
+
+
+async def _is_same_unit(hass: HomeAssistant, entry: ConfigEntry, host: str) -> bool:
+    """Whether the unit answering at `host` is the one `entry` is for.
+
+    An announcement is unauthenticated: anything on the LAN can claim a
+    unit's MAC. The entry's credentials go to the new address only over a
+    connection presenting the certificate stored at the entry's last setup,
+    and the serial read there must be the entry's unique id.
+    """
+    pinned = _pinned_certificate(entry)
+    if pinned is None:
+        return False
+    client = _client(hass, {**entry.data, CONF_HOST: host}, cert_sha256=pinned)
+    try:
+        await client.check_auth()
+        system = await client.get_system()
+    except GlkvmError as err:
+        _LOGGER.debug("Not following the entry to %s: %s", host, err)
+        return False
+    return system.serial is not None and system.serial == entry.unique_id
 
 
 async def _identify(
@@ -212,7 +253,8 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         The serial an entry is keyed on is behind authentication, so it is
         not in the announcement; the MAC is, base64-encoded. A MAC that
         matches a configured entry moves that entry to the new address rather
-        than offering the same unit a second time.
+        than offering the same unit a second time, once the new address has
+        shown it is the same unit (see _is_same_unit).
         """
         mac = mac_from_txt(discovery_info.properties.get(ZEROCONF_MAC))
         if mac is None:
@@ -223,7 +265,9 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         for entry in self._async_current_entries(include_ignore=False):
             if normalise_mac(entry.data.get(CONF_MAC)) != mac:
                 continue
-            if entry.data.get(CONF_HOST) != host:
+            if entry.data.get(CONF_HOST) != host and await _is_same_unit(
+                self.hass, entry, host
+            ):
                 self.hass.config_entries.async_update_entry(
                     entry, data={**entry.data, CONF_HOST: host}
                 )
@@ -233,7 +277,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         # Until the credentials are entered the MAC is all this unit can be
         # keyed on; the serial replaces it once the confirm step has read it.
         await self.async_set_unique_id(mac)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+        self._abort_if_unique_id_configured()
         self._discovered = {CONF_HOST: host, CONF_PORT: port, CONF_MAC: mac}
         name = discovery_info.name.removesuffix(f".{discovery_info.type}") or host
         self.context["title_placeholders"] = {"name": name}

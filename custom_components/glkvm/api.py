@@ -21,7 +21,11 @@ polling on the first 401 rather than retrying with the same credentials.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import hashlib
 import json
+import ssl
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -96,6 +100,7 @@ class GlkvmClient:
         username: str | None = None,
         password: str | None = None,
         verify_ssl: bool = False,
+        cert_sha256: str | None = None,
     ) -> None:
         self._session = session
         self._host = host
@@ -107,7 +112,11 @@ class GlkvmClient:
         # aiohttp takes ssl=False to skip verification; True means the default
         # context. The unit's certificate is self-signed for "localhost", so
         # the default is off (see const.DEFAULT_VERIFY_SSL).
-        self._ssl: bool = verify_ssl
+        self._ssl: bool | aiohttp.Fingerprint = verify_ssl
+        if cert_sha256 is not None:
+            # A pinned certificate: aiohttp checks it on the TLS connection
+            # before the request, and with it the credentials, is sent.
+            self._ssl = aiohttp.Fingerprint(bytes.fromhex(cert_sha256))
 
     @property
     def host(self) -> str:
@@ -204,6 +213,33 @@ class GlkvmClient:
     @staticmethod
     def _mapping(result: Any) -> Mapping[str, Any]:
         return result if isinstance(result, Mapping) else {}
+
+    async def get_certificate_sha256(self) -> str:
+        """SHA-256 of the certificate the unit presents, as lowercase hex.
+
+        A TLS handshake and nothing else: no request is sent, so no
+        credential is. The digest is the one aiohttp.Fingerprint checks.
+        """
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        try:
+            async with asyncio.timeout(_TIMEOUT_STATE.total):
+                _reader, writer = await asyncio.open_connection(
+                    self._host, self._port, ssl=context
+                )
+        except (OSError, TimeoutError) as err:
+            raise GlkvmConnectionError(f"TLS handshake: {err}") from err
+        try:
+            ssl_object = writer.get_extra_info("ssl_object")
+            der = ssl_object.getpeercert(binary_form=True) if ssl_object else None
+        finally:
+            writer.close()
+            with contextlib.suppress(OSError):
+                await writer.wait_closed()
+        if not der:
+            raise GlkvmConnectionError("TLS handshake: no certificate presented")
+        return hashlib.sha256(der).hexdigest()
 
     # ---------------------------------------------------------------- reads
 

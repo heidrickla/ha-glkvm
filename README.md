@@ -93,6 +93,8 @@ Units on the same network as Home Assistant announce themselves over mDNS (`_gli
 
 The announcement carries the unit's MAC address, and Home Assistant stores it with the entry. That is what lets a unit that changes IP address, on a DHCP lease renewal or a move to another subnet, be recognised as the one you already have: the entry follows it to the new address instead of offering you a second copy of the same KVM. A unit added by hand gets its MAC stored at setup, so it is discoverable when it later moves.
 
+The entry follows only a unit that proves it is the same one. At every setup the entry stores the SHA-256 of the certificate the unit presents. The entry's credentials go to an announced address only over a connection presenting that certificate, and the serial read there must be the entry's. An address that fails either check is ignored and the entry stays where it is; Reconfigure moves it by hand.
+
 If your network does not carry mDNS between Home Assistant and the unit, add it by address instead. Nothing else depends on discovery.
 
 ### Installation parameters
@@ -228,6 +230,7 @@ sequence:
 | Everything is unavailable | The unit is unreachable. The log has one line saying so and one when it recovers. |
 | One group of entities is unavailable while the rest are fine | The endpoint behind that group failed on the last poll. Turn on debug logging: the coordinator names each failed section. |
 | The KVM is not discovered | Home Assistant sees mDNS only on networks it is attached to, and the announcement is filtered on the model. Add the unit by address. |
+| A KVM that changed address is not followed | Its entry has no stored certificate yet, or the unit presents a different certificate (after a reset, or a firmware that regenerates it). Use Reconfigure to set the new address. |
 | A discovered KVM you already have is offered as a new device | Its entry has no stored MAC yet. Adding it anyway is safe: it is recognised by its serial and updates the entry you have. |
 | Camera and capture sensors unavailable, the rest fine | The streamer is not running on the unit. See known limitations. |
 | Virtual media entities unavailable, the rest fine | The mass-storage gadget is offline. See known limitations. |

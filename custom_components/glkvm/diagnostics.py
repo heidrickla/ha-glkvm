@@ -9,11 +9,21 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
+from .const import CONF_CERT_SHA256
 from .coordinator import GlkvmConfigEntry
 
 # Credentials, plus everything that identifies the household's hardware or
 # the machines on its LAN. Diagnostics files end up in public issue trackers.
-REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD, "serial", "hostname", "mac", "ip"}
+REDACT = {
+    CONF_HOST,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+    CONF_CERT_SHA256,
+    "serial",
+    "hostname",
+    "mac",
+    "ip",
+}
 
 # The Wake-on-LAN list only. WolTarget.name is the label the unit stores for a
 # machine on the LAN, in practice that machine's hostname. MsdImage.name and

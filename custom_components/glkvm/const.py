@@ -15,6 +15,11 @@ VERSION = "0.2.1"
 DEFAULT_PORT = 443
 DEFAULT_VERIFY_SSL = False
 
+# Entry data: SHA-256 of the certificate the unit presented at its last setup.
+# A discovered address is trusted with the entry's credentials only over a
+# connection presenting this certificate.
+CONF_CERT_SHA256 = "cert_sha256"
+
 # What changes on a KVM changes at human speed - a host powering off, a video
 # signal dropping, an image being attached. Thirty seconds notices all of that
 # while leaving the unit's CPU to the video encoder. The same state is

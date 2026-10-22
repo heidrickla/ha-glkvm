@@ -161,9 +161,11 @@ rules:
       is stored in entry data by the user, reconfigure and discovery flows
       and refreshed at every setup. A discovered MAC that matches a
       configured entry updates that entry's host and reloads it rather than
-      offering the unit twice; an entry from before the MAC was stored is
-      still recognised by its serial in the confirm step, which updates its
-      host too. Both paths are tested.
+      offering the unit twice, once the new address has presented the
+      certificate stored at the entry's last setup and reported the entry's
+      serial over that pinned connection; an entry from before the MAC was
+      stored is still recognised by its serial in the confirm step, which
+      updates its host too. Both paths are tested.
   docs-data-update: done
   docs-examples:
     status: done
