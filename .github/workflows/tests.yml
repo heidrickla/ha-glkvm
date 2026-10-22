@@ -8,14 +8,20 @@ on:
 # Gitea reads .github/workflows too, so every job here is gated to github.com.
 # Elsewhere they skip instantly and .gitea/workflows/validate.yml is what runs.
 
+# Nothing here writes to the repository, publishes, or comments on a pull
+# request. Each job reads the repository and nothing else.
+permissions: {}
+
 jobs:
   tests:
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Home Assistant 2026.x needs Python 3.14.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.14"
       # 0.13.357 pins Home Assistant 2026.8.3; it brings pytest, its asyncio
