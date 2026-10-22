@@ -112,7 +112,7 @@ Setup checks the credentials against the unit and reads its serial number before
 
 Settings -> Devices & Services -> GL.iNet KVM -> Reconfigure changes the address, port, credentials or certificate check. The address must still answer as the same unit, and a blank password keeps the current one. There are no options beyond these.
 
-When the unit starts refusing the credentials, Home Assistant stops polling and asks for them again. It stops rather than retrying because GL.iNet's firmware locks the account after repeated failed logins. The new credentials are checked against the serial the entry was set up for: if a different KVM has been put at that address, the form says so rather than quietly handing this entry's device, entities and history to another unit.
+When the unit starts refusing the credentials, Home Assistant stops polling and asks for them again. It stops rather than retrying because GL.iNet's firmware locks the account after repeated failed logins. Each poll checks the credentials once before its concurrent reads, so a changed password costs one failed login. The new credentials are checked against the serial the entry was set up for: if a different KVM has been put at that address, the form says so rather than quietly handing this entry's device, entities and history to another unit.
 
 ### Removing it
 

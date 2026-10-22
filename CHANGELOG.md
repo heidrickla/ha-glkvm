@@ -2,7 +2,7 @@
 
 Everything a user of this integration would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the version numbers are the ones in `manifest.json`. Changes that only move code around, or that touch tests and CI, are not listed unless they change what the integration does.
 
-## [Unreleased]
+## [0.2.2] - 2026-10-22
 
 ### Changed
 
