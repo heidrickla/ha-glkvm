@@ -2,6 +2,13 @@
 
 Everything a user of this integration would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the version numbers are the ones in `manifest.json`. Changes that only move code around, or that touch tests and CI, are not listed unless they change what the integration does.
 
+## [Unreleased]
+
+### Changed
+
+- The four actions (`type_text`, `send_keys`, `wake`, `power`) are administrator actions. A non-administrator's call is refused with Home Assistant's own unauthorized error; automations and scripts are unaffected.
+- The switches, buttons and selects answer administrators only: host power, the ATX and keyboard-reset buttons, virtual media and its image, the mouse jiggler and mouse mode, GPIO outputs and Wake-on-LAN. A press from a non-administrator is refused; automations and scripts are unaffected.
+
 ## [0.2.1] - 2026-09-15
 
 ### Fixed

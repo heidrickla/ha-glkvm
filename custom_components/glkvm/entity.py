@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Awaitable
 from typing import NoReturn, override
 
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import GlkvmAuthError, GlkvmError
@@ -66,12 +67,34 @@ class GlkvmEntity(CoordinatorEntity[GlkvmCoordinator]):
         """
         return super().available and self._section not in self.data.failed
 
+    async def _async_require_admin(self) -> None:
+        """Refuse a call made by a user who is not an administrator.
+
+        Every command operates the attached host or reconfigures the unit.
+        A call with no user (an automation, a script) passes.
+        """
+        context = self._context
+        user_id = context.user_id if context is not None else None
+        if user_id is None:
+            return
+        user = await self.hass.auth.async_get_user(user_id)
+        if user is None or not user.is_admin:
+            raise Unauthorized(context=context, entity_id=self.entity_id)
+
     async def _run(self, command: Awaitable[None]) -> None:
         """Send one command, translate its failure, then re-read the state.
 
         The refresh is what makes a switch settle on the state the unit
         actually reached rather than the one that was asked for.
         """
+        try:
+            await self._async_require_admin()
+        except Unauthorized:
+            # The command was built but never sent; close it so it is not
+            # reported as a coroutine that was never awaited.
+            if inspect.iscoroutine(command):
+                command.close()
+            raise
         try:
             await command
         except GlkvmError as err:

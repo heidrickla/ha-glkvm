@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.service import async_register_admin_service
 
 from .api import GlkvmError
 from .const import (
@@ -135,11 +136,16 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise_from_error(err)
         await coordinator.async_request_refresh()
 
-    hass.services.async_register(
-        DOMAIN, SERVICE_TYPE_TEXT, _type_text, schema=TYPE_TEXT_SCHEMA
+    # Each action types into, powers or wakes another machine, so only an
+    # administrator may call it; a call with no user (automation, script)
+    # passes.
+    async_register_admin_service(
+        hass, DOMAIN, SERVICE_TYPE_TEXT, _type_text, schema=TYPE_TEXT_SCHEMA
     )
-    hass.services.async_register(
-        DOMAIN, SERVICE_SEND_KEYS, _send_keys, schema=SEND_KEYS_SCHEMA
+    async_register_admin_service(
+        hass, DOMAIN, SERVICE_SEND_KEYS, _send_keys, schema=SEND_KEYS_SCHEMA
     )
-    hass.services.async_register(DOMAIN, SERVICE_WAKE, _wake, schema=WAKE_SCHEMA)
-    hass.services.async_register(DOMAIN, SERVICE_POWER, _power, schema=POWER_SCHEMA)
+    async_register_admin_service(hass, DOMAIN, SERVICE_WAKE, _wake, schema=WAKE_SCHEMA)
+    async_register_admin_service(
+        hass, DOMAIN, SERVICE_POWER, _power, schema=POWER_SCHEMA
+    )

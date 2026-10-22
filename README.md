@@ -24,9 +24,13 @@ Local (no cloud) Home Assistant integration for GL.iNet Comet KVM-over-IP units:
 
 Memory available, both network rates, the H.264 bitrate and the stream client count are there too, disabled by default.
 
+The switches, buttons and selects operate the host or change the unit's settings, so they answer administrators only. A non-administrator's press is refused; an automation or script runs it.
+
 ### Actions
 
 Every action takes the KVM to talk to as `config_entry_id`, because you may have more than one. In the UI it is a picker; in YAML it is the entry id, which the picker fills in for you when you switch the editor to YAML mode. An action called while that KVM is unloaded is refused in words rather than failing silently.
+
+The four actions are administrator actions. A call from a non-administrator is refused; a call from an automation or script runs.
 
 `glkvm.type_text` types text into the host over the USB keyboard.
 
