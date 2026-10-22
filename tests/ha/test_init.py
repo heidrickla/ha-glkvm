@@ -158,6 +158,16 @@ async def test_a_changed_password_costs_one_failed_login_per_poll(
     assert _reauth_in_progress(hass)
 
 
+async def test_one_section_refusing_the_credentials_starts_reauth(
+    hass, fake_client, config_entry
+):
+    # The credential check passed and one endpoint answered 401 or 403.
+    await setup_entry(hass, config_entry)
+    fake_client.read_fail["atx"] = GlkvmAuthError("forbidden")
+    await _poll(hass, config_entry)
+    assert _reauth_in_progress(hass)
+
+
 async def test_losing_the_unit_marks_entities_unavailable_then_recovers(
     hass, fake_client, config_entry
 ):
