@@ -50,6 +50,12 @@ _TIMEOUT_STATE = aiohttp.ClientTimeout(total=15)
 _TIMEOUT_COMMAND = aiohttp.ClientTimeout(total=40)
 _TIMEOUT_SNAPSHOT = aiohttp.ClientTimeout(total=20)
 
+# GL.iNet's ATX plugin answers every `wait=1` request with HTTP 500 (it enters
+# a synchronous region with `async with`), so ATX commands go as GL's web UI
+# sends them and waiting is polling `busy` until the press is over.
+_ATX_WAIT = 40.0
+_ATX_POLL = 0.5
+
 POWER_ACTIONS: tuple[str, ...] = ("on", "off", "off_hard", "reset_hard")
 ATX_BUTTONS: tuple[str, ...] = ("power", "power_long", "reset")
 
@@ -363,17 +369,28 @@ class GlkvmClient:
         """
         if action not in POWER_ACTIONS:
             raise ValueError(f"unknown ATX power action {action!r}")
-        await self._post(
-            "/api/atx/power", params={"action": action, "wait": _flag(wait)}
-        )
+        await self._atx("/api/atx/power", {"action": action}, wait)
 
     async def atx_click(self, button: str, *, wait: bool = True) -> None:
         """Press a front-panel button: power, power_long or reset."""
         if button not in ATX_BUTTONS:
             raise ValueError(f"unknown ATX button {button!r}")
-        await self._post(
-            "/api/atx/click", params={"button": button, "wait": _flag(wait)}
-        )
+        await self._atx("/api/atx/click", {"button": button}, wait)
+
+    async def _atx(self, path: str, params: dict[str, str], wait: bool) -> None:
+        # kvmd answers once the press has started and holds `busy` until it ends;
+        # a press while one is running is refused with AtxIsBusyError.
+        await self._post(path, params={**params, "wait": _flag(False)})
+        if not wait:
+            return
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _ATX_WAIT
+        while (await self.get_atx()).busy:
+            if loop.time() >= deadline:
+                raise GlkvmConnectionError(
+                    f"{path}: the ATX command was still running after {_ATX_WAIT:.0f} s"
+                )
+            await asyncio.sleep(_ATX_POLL)
 
     async def msd_set_connected(self, connected: bool) -> None:
         """Attach or detach the selected image to the host's USB."""

@@ -325,14 +325,30 @@ def test_shortcut_with_no_keys_is_refused_before_any_request():
     assert session.calls == []
 
 
-def test_atx_power_validates_the_action_locally():
-    session = _Session([_json({"ok": True, "result": {}})])
+def _atx_state(busy: bool) -> _Resp:
+    return _json({"ok": True, "result": {"enabled": True, "busy": busy, "power": "on"}})
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    slept: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        slept.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", sleep)
+    return slept
+
+
+def test_atx_power_validates_the_action_locally(no_sleep):
+    session = _Session([_json({"ok": True, "result": {}}), _atx_state(False)])
     client = _client(session)
     with pytest.raises(ValueError):
         _run(client.atx_power("explode"))
     assert session.calls == []
     _run(client.atx_power("off"))
-    assert session.calls[0]["params"] == {"action": "off", "wait": "1"}
+    assert session.calls[0]["url"].endswith("/api/atx/power")
+    assert session.calls[0]["params"] == {"action": "off", "wait": "0"}
 
 
 def test_atx_click():
@@ -344,6 +360,54 @@ def test_atx_click():
     _run(client.atx_click("power_long", wait=False))
     assert session.calls[0]["url"].endswith("/api/atx/click")
     assert session.calls[0]["params"] == {"button": "power_long", "wait": "0"}
+    assert len(session.calls) == 1
+
+
+def test_no_atx_command_asks_kvmd_to_wait(no_sleep):
+    # GL.iNet's ATX plugin answers wait=1 with HTTP 500 (heidrickla/ha-glkvm#2).
+    for call in (
+        lambda c: c.atx_click("power"),
+        lambda c: c.atx_click("reset", wait=True),
+        lambda c: c.atx_power("on"),
+        lambda c: c.atx_power("reset_hard", wait=False),
+    ):
+        session = _Session([_json({"ok": True, "result": {}}), _atx_state(False)])
+        _run(call(_client(session)))
+        assert session.calls[0]["method"] == "POST"
+        assert session.calls[0]["params"]["wait"] == "0"
+
+
+def test_waiting_polls_busy_until_the_press_is_over(no_sleep):
+    session = _Session(
+        [
+            _json({"ok": True, "result": {}}),
+            _atx_state(True),
+            _atx_state(True),
+            _atx_state(False),
+        ]
+    )
+    _run(_client(session).atx_click("power_long"))
+    assert [c["method"] for c in session.calls] == ["POST", "GET", "GET", "GET"]
+    assert all(c["url"].endswith("/api/atx") for c in session.calls[1:])
+    assert no_sleep == [api._ATX_POLL, api._ATX_POLL]
+
+
+def test_a_press_still_running_at_the_deadline_is_a_connection_error(
+    no_sleep, monkeypatch
+):
+    monkeypatch.setattr(api, "_ATX_WAIT", 0.0)
+    session = _Session([_json({"ok": True, "result": {}}), _atx_state(True)])
+    with pytest.raises(api.GlkvmConnectionError):
+        _run(_client(session).atx_power("off_hard"))
+    assert len(session.calls) == 2
+
+
+def test_a_busy_refusal_is_raised_without_polling(no_sleep):
+    busy = {"ok": False, "result": {"error": "AtxIsBusyError", "error_msg": "busy"}}
+    session = _Session([_json(busy, status=409)])
+    with pytest.raises(api.GlkvmResponseError):
+        _run(_client(session).atx_click("reset"))
+    assert len(session.calls) == 1
 
 
 def test_msd_commands():

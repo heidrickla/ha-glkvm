@@ -2,6 +2,12 @@
 
 Everything a user of this integration would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the version numbers are the ones in `manifest.json`. Changes that only move code around, or that touch tests and CI, are not listed unless they change what the integration does.
 
+## [0.2.3] - 2026-10-23
+
+### Fixed
+
+- The host power switch, the Power button, Hold power button and Reset, and the `power` action work on firmware 1.10.0 and 1.10.1. Each failed with "The KVM did not carry out the command: Error: HTTP 500", because GL.iNet's ATX plugin answers every request that asks the unit to wait with HTTP 500. ATX commands now go the way the unit's web interface sends them, and waiting (the default, and the `power` action's `wait`) follows the unit's ATX busy flag until the press is over, for up to 40 seconds. ([#2](https://github.com/heidrickla/ha-glkvm/issues/2))
+
 ## [0.2.2] - 2026-10-22
 
 ### Changed
