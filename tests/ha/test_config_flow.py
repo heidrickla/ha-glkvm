@@ -37,6 +37,7 @@ from .conftest import (
     UNIT_MAC,
     UNIT_MAC_TXT,
 )
+from .frontend_form import frontend_submission
 
 
 def _field(schema, name):
@@ -137,7 +138,8 @@ async def test_the_first_form_asks_only_for_the_address_and_password(hass, fake_
 
     # Typing the two and pressing Submit is the whole setup.
     done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_HOST: HOST, CONF_PASSWORD: "secret"}
+        result["flow_id"],
+        frontend_submission(result, {CONF_HOST: HOST, CONF_PASSWORD: "secret"}),
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
     assert done["data"] == {**ENTRY_DATA, CONF_MAC: UNIT_MAC}
@@ -263,7 +265,7 @@ async def test_a_discovered_unit_asks_only_for_its_password_and_is_added(
     assert defaults == {CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
 
     done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_PASSWORD: "secret"}
+        result["flow_id"], frontend_submission(result, {CONF_PASSWORD: "secret"})
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
     # The address and port came from the announcement; the serial, which the
@@ -295,7 +297,7 @@ async def test_a_discovered_unit_that_refuses_the_login_recovers(hass, fake_clie
 
     fake_client.fail = None
     done = await hass.config_entries.flow.async_configure(
-        shown["flow_id"], {CONF_PASSWORD: "right"}
+        shown["flow_id"], frontend_submission(shown, {CONF_PASSWORD: "right"})
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
     assert done["data"][CONF_PASSWORD] == "right"
@@ -408,7 +410,7 @@ async def test_an_entry_added_before_the_mac_was_stored_is_still_recognised(
     result = await _discover(hass)
     assert result["type"] is FlowResultType.FORM
     done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_PASSWORD: "secret"}
+        result["flow_id"], frontend_submission(result, {CONF_PASSWORD: "secret"})
     )
     assert done["type"] is FlowResultType.ABORT
     assert done["reason"] == "already_configured"

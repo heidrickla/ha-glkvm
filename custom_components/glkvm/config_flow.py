@@ -163,8 +163,10 @@ _VERIFY_SSL = vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL)
 
 def _advanced(fields: dict[Any, Any], *, collapsed: bool) -> dict[Any, Any]:
     """Fields with a working default, in a section that an error opens."""
+    # No default on the section key: the frontend would send that default as
+    # the section's data and never fill in the defaults of the fields inside.
     return {
-        vol.Required(CONF_ADVANCED, default={}): section(
+        vol.Required(CONF_ADVANCED): section(
             vol.Schema(fields), {"collapsed": collapsed}
         )
     }

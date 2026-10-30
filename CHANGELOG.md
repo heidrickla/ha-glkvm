@@ -10,6 +10,7 @@ Everything a user of this integration would notice, newest first. The format fol
 - Adding a discovered unit asks only for its password; the username and the certificate check sit in Advanced.
 - Reconfigure and reauthentication fill an empty username with `admin` too. A unit with authentication disabled accepts any login, so this changes nothing there.
 - When the unit cannot be reached or refuses the login, the form opens Advanced and keeps everything typed except the password.
+- The setup screen submits with Advanced left collapsed: the section opens holding its defaults, where before the frontend sent it empty and refused Submit with "Not all required fields are filled in."
 - The README opens the repository in HACS and starts the setup with My Home Assistant buttons, and no longer asks for a custom repository: GL.iNet KVM is in the HACS default list.
 
 ## [0.2.3] - 2026-10-23
