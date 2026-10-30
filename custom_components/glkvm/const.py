@@ -15,8 +15,8 @@ VERSION = "0.3.0"
 DEFAULT_PORT = 443
 DEFAULT_VERIFY_SSL = False
 
-# Stock firmware has one kvmd user, admin; its web interface asks only for
-# the password. A unit with authentication disabled accepts any login.
+# Stock firmware's kvmd has one user, admin, the login its web interface
+# checks too. A unit with authentication disabled accepts any login.
 DEFAULT_USERNAME = "admin"
 
 # The setup forms' collapsed section holding what has a working default.

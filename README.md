@@ -89,7 +89,7 @@ The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not a 
 
 [![Open your Home Assistant instance and start setting up GL.iNet KVM.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=glkvm)
 
-4. GL.iNet KVM: enter the unit's IP address (a discovered unit has it already) and the password you set in its web interface, and press Submit.
+4. GL.iNet KVM: enter the unit's IP address (a discovered unit has it already) and the password you log in to its web interface with, and press Submit.
 
 The Advanced section of that screen holds the port, the username and the certificate check; the defaults fit a stock unit. If the unit cannot be reached or refuses the login, the screen says so, opens Advanced and keeps what you typed.
 
@@ -110,7 +110,7 @@ If your network does not carry mDNS between Home Assistant and the unit, add it 
 | Field | Where | Meaning |
 |---|---|---|
 | Host | First screen (by hand only) | The unit's LAN IP address. Prefer the IP to a `.local` name: with more than one unit, mDNS can answer for the wrong one. |
-| Password | First screen | The password set in the unit's web interface. Leave it empty if authentication is disabled on the unit, which then accepts any login. |
+| Password | First screen | The password you log in to the unit's web interface with. Leave it empty if authentication is disabled on the unit, which then accepts any login. |
 | Port | Advanced (by hand only) | 443 unless you have moved the web interface. |
 | Username | Advanced | `admin`, the one login stock firmware has. |
 | Verify the KVM's certificate | Advanced | Off by default. The unit ships a self-signed certificate for `localhost`; turn this on only if you have installed your own. |

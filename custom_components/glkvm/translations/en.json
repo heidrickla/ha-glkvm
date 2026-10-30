@@ -11,7 +11,7 @@
         },
         "data_description": {
           "host": "The KVM's IP address, shown in its web interface and in your router's list of devices. Prefer it to a .local name if you have more than one unit.",
-          "password": "The password you set in the KVM's web interface. Leave empty if the unit has authentication disabled."
+          "password": "The password you log in to the KVM's web interface with. Leave empty if the unit has authentication disabled."
         },
         "sections": {
           "advanced": {
@@ -37,7 +37,7 @@
           "password": "Password"
         },
         "data_description": {
-          "password": "The password you set in the KVM's web interface. Leave empty if the unit has authentication disabled."
+          "password": "The password you log in to the KVM's web interface with. Leave empty if the unit has authentication disabled."
         },
         "sections": {
           "advanced": {
