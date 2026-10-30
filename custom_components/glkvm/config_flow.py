@@ -19,6 +19,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -31,8 +32,10 @@ from .api import (
     GlkvmError,
 )
 from .const import (
+    CONF_ADVANCED,
     CONF_CERT_SHA256,
     DEFAULT_PORT,
+    DEFAULT_USERNAME,
     DEFAULT_VERIFY_SSL,
     DOMAIN,
     NAME,
@@ -154,34 +157,67 @@ _PASSWORD = selector.TextSelector(
     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
 )
 
+_USERNAME = vol.Required(CONF_USERNAME, default=DEFAULT_USERNAME)
+_VERIFY_SSL = vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL)
+
+
+def _advanced(fields: dict[Any, Any], *, collapsed: bool) -> dict[Any, Any]:
+    """Fields with a working default, in a section that an error opens."""
+    return {
+        vol.Required(CONF_ADVANCED, default={}): section(
+            vol.Schema(fields), {"collapsed": collapsed}
+        )
+    }
+
+
 # The password has no default on purpose. A default is sent to the frontend,
 # where the field can reveal it, and it is also applied when the user clears
 # the field, so a blanked password would silently resubmit the old one. What
 # the user typed is carried across an error as suggested values instead.
-USER_SCHEMA = vol.Schema(
+def _user_schema(*, collapsed: bool) -> vol.Schema:
+    """By hand: the address and the password; the rest defaults."""
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST): str,
+            vol.Optional(CONF_PASSWORD): _PASSWORD,
+            **_advanced(
+                {
+                    vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
+                    _USERNAME: str,
+                    _VERIFY_SSL: bool,
+                },
+                collapsed=collapsed,
+            ),
+        }
+    )
+
+
+# A discovered unit brings its own address and port; only the password is
+# left that the user has to know.
+def _discovery_schema(*, collapsed: bool) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(CONF_PASSWORD): _PASSWORD,
+            **_advanced({_USERNAME: str, _VERIFY_SSL: bool}, collapsed=collapsed),
+        }
+    )
+
+
+# Reconfigure is where a user goes to change these, so all of them show.
+_RECONFIGURE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
-        vol.Optional(CONF_USERNAME, default=""): str,
+        _USERNAME: str,
         vol.Optional(CONF_PASSWORD): _PASSWORD,
-        vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
+        _VERIFY_SSL: bool,
     }
 )
 
 _REAUTH_SCHEMA = vol.Schema(
     {
-        vol.Optional(CONF_USERNAME, default=""): str,
+        _USERNAME: str,
         vol.Optional(CONF_PASSWORD): _PASSWORD,
-    }
-)
-
-# A discovered unit brings its own address and port; only the login and the
-# certificate check are left to ask for.
-_DISCOVERY_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_USERNAME, default=""): str,
-        vol.Optional(CONF_PASSWORD): _PASSWORD,
-        vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
     }
 )
 
@@ -189,6 +225,13 @@ _DISCOVERY_SCHEMA = vol.Schema(
 def _without_password(data: Mapping[str, Any]) -> dict[str, Any]:
     """What may go back to the browser as suggested values: never the secret."""
     return {k: v for k, v in data.items() if k != CONF_PASSWORD}
+
+
+def _flatten(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Form input as the entry stores it, the Advanced fields beside the rest."""
+    data = {k: v for k, v in user_input.items() if k != CONF_ADVANCED}
+    data.update(user_input.get(CONF_ADVANCED) or {})
+    return data
 
 
 def _with_mac(data: Mapping[str, Any], mac: str | None) -> dict[str, Any]:
@@ -227,9 +270,10 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors, unique_id, title, mac = await self._async_try(user_input)
+            data = _flatten(user_input)
+            errors, unique_id, title, mac = await self._async_try(data)
             if not errors and unique_id is not None:
-                data = _with_mac(user_input, mac)
+                data = _with_mac(data, mac)
                 await self.async_set_unique_id(unique_id)
                 # Re-adding a known unit refreshes everything it was reached
                 # with, not only the address: a moved unit may also have a
@@ -239,7 +283,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
-                USER_SCHEMA, _without_password(user_input or {})
+                _user_schema(collapsed=not errors), _without_password(user_input or {})
             ),
             errors=errors,
         )
@@ -286,10 +330,10 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask a discovered unit's login, then read the serial it is keyed on."""
+        """Ask a discovered unit's password, then read the serial it is keyed on."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            data = {**self._discovered, **user_input}
+            data = {**self._discovered, **_flatten(user_input)}
             errors, unique_id, title, mac = await self._async_try(data)
             if not errors and unique_id is not None:
                 data = _with_mac(data, mac)
@@ -301,7 +345,8 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="zeroconf_confirm",
             data_schema=self.add_suggested_values_to_schema(
-                _DISCOVERY_SCHEMA, _without_password(user_input or {})
+                _discovery_schema(collapsed=not errors),
+                _without_password(user_input or {}),
             ),
             description_placeholders={"host": self._discovered[CONF_HOST]},
             errors=errors,
@@ -331,7 +376,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                USER_SCHEMA, _without_password(user_input or entry.data)
+                _RECONFIGURE_SCHEMA, _without_password(user_input or entry.data)
             ),
             errors=errors,
         )

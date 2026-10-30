@@ -4,34 +4,54 @@
     "step": {
       "user": {
         "title": "GL.iNet KVM",
-        "description": "Connect to a GL.iNet Comet KVM on your local network.",
+        "description": "Connect to a GL.iNet Comet KVM on your local network. A unit on the same network as Home Assistant usually appears under Discovered by itself, and adding it from there asks only for the password.",
         "data": {
           "host": "Host",
-          "port": "Port",
-          "username": "Username",
-          "password": "Password",
-          "verify_ssl": "Verify the KVM's certificate"
+          "password": "Password"
         },
         "data_description": {
-          "host": "The KVM's LAN address. Use the IP address rather than a .local name if you have more than one unit.",
-          "port": "443 unless you have moved the web interface.",
-          "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
-          "password": "The KVM's password. Leave empty if the unit has authentication disabled.",
-          "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+          "host": "The KVM's IP address, shown in its web interface and in your router's list of devices. Prefer it to a .local name if you have more than one unit.",
+          "password": "The password you set in the KVM's web interface. Leave empty if the unit has authentication disabled."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "The defaults fit a stock unit.",
+            "data": {
+              "port": "Port",
+              "username": "Username",
+              "verify_ssl": "Verify the KVM's certificate"
+            },
+            "data_description": {
+              "port": "443 unless you have moved the web interface.",
+              "username": "admin on stock firmware, which has no other login.",
+              "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+            }
+          }
         }
       },
       "zeroconf_confirm": {
         "title": "GL.iNet KVM",
-        "description": "A GL.iNet KVM was found at {host}. Enter its login to add it.",
+        "description": "A GL.iNet KVM was found at {host}. Enter its password to add it.",
         "data": {
-          "username": "Username",
-          "password": "Password",
-          "verify_ssl": "Verify the KVM's certificate"
+          "password": "Password"
         },
         "data_description": {
-          "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
-          "password": "The KVM's password. Leave empty if the unit has authentication disabled.",
-          "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+          "password": "The password you set in the KVM's web interface. Leave empty if the unit has authentication disabled."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "The defaults fit a stock unit.",
+            "data": {
+              "username": "Username",
+              "verify_ssl": "Verify the KVM's certificate"
+            },
+            "data_description": {
+              "username": "admin on stock firmware, which has no other login.",
+              "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+            }
+          }
         }
       },
       "reconfigure": {
@@ -47,7 +67,7 @@
         "data_description": {
           "host": "The KVM's LAN address.",
           "port": "443 unless you have moved the web interface.",
-          "username": "The KVM's login. Leave empty if the unit has authentication disabled.",
+          "username": "admin on stock firmware, which has no other login.",
           "password": "The KVM's password. Leave empty to keep the current one.",
           "verify_ssl": "Leave off unless you have installed your own trusted certificate."
         }
@@ -60,7 +80,7 @@
           "password": "Password"
         },
         "data_description": {
-          "username": "The KVM's login.",
+          "username": "admin on stock firmware, which has no other login.",
           "password": "The KVM's password."
         }
       }

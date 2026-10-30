@@ -16,8 +16,9 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_PORT,
     CONF_USERNAME,
+    CONF_VERIFY_SSL,
 )
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, section
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from custom_components.glkvm.api import (
@@ -26,7 +27,7 @@ from custom_components.glkvm.api import (
     GlkvmResponseError,
 )
 from custom_components.glkvm.config_flow import mac_from_txt, normalise_mac
-from custom_components.glkvm.const import CONF_CERT_SHA256, DOMAIN
+from custom_components.glkvm.const import CONF_ADVANCED, CONF_CERT_SHA256, DOMAIN
 
 from .conftest import (
     ENTRY_DATA,
@@ -45,6 +46,25 @@ def _field(schema, name):
     pytest.fail(f"no {name} field on the form")
 
 
+def _advanced(result) -> section:
+    """The form's collapsed section of fields that have a working default."""
+    schema = result["data_schema"]
+    value = schema.schema[_field(schema, CONF_ADVANCED)]
+    assert isinstance(value, section)
+    return value
+
+
+_DEFAULTED = (CONF_PORT, CONF_USERNAME, CONF_VERIFY_SSL)
+
+
+def _form(data=ENTRY_DATA):
+    """Entry data as the first form takes it, the defaulted fields in Advanced."""
+    return {
+        **{k: v for k, v in data.items() if k not in _DEFAULTED},
+        CONF_ADVANCED: {k: data[k] for k in _DEFAULTED if k in data},
+    }
+
+
 def _password_is_not_echoed(result) -> None:
     """The password field carries neither a default nor a suggested value."""
     key = _field(result["data_schema"], CONF_PASSWORD)
@@ -57,7 +77,7 @@ def _password_is_not_echoed(result) -> None:
 
 async def test_user_step_creates_the_entry_keyed_on_the_serial(hass, fake_client):
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}, data=dict(ENTRY_DATA)
+        DOMAIN, context={"source": SOURCE_USER}, data=_form()
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_HOST] == HOST
@@ -74,7 +94,7 @@ async def test_a_unit_that_will_not_say_its_mac_is_still_added(hass, fake_client
     # the entry its discovery key.
     fake_client.network = None
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}, data=dict(ENTRY_DATA)
+        DOMAIN, context={"source": SOURCE_USER}, data=_form()
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert CONF_MAC not in result["data"]
@@ -83,7 +103,7 @@ async def test_a_unit_that_will_not_say_its_mac_is_still_added(hass, fake_client
 async def test_title_falls_back_to_the_address(hass, fake_client):
     fake_client.hostname = None
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}, data=dict(ENTRY_DATA)
+        DOMAIN, context={"source": SOURCE_USER}, data=_form()
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == HOST
@@ -92,19 +112,35 @@ async def test_title_falls_back_to_the_address(hass, fake_client):
 async def test_a_unit_without_a_serial_is_keyed_on_its_address(hass, fake_client):
     fake_client.system = replace(fake_client.system, serial=None)
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}, data=dict(ENTRY_DATA)
+        DOMAIN, context={"source": SOURCE_USER}, data=_form()
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["result"].unique_id == HOST
 
 
-async def test_the_first_form_is_shown_with_no_input(hass, fake_client):
+async def test_the_first_form_asks_only_for_the_address_and_password(hass, fake_client):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
+    assert list(result["data_schema"].schema) == [
+        CONF_HOST,
+        CONF_PASSWORD,
+        CONF_ADVANCED,
+    ]
     _password_is_not_echoed(result)
+    advanced = _advanced(result)
+    assert advanced.options["collapsed"] is True
+    defaults = {str(k): k.default() for k in advanced.schema.schema}
+    assert defaults == {CONF_PORT: 443, CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
+
+    # Typing the two and pressing Submit is the whole setup.
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: HOST, CONF_PASSWORD: "secret"}
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert done["data"] == {**ENTRY_DATA, CONF_MAC: UNIT_MAC}
 
 
 @pytest.mark.parametrize(
@@ -120,21 +156,23 @@ async def test_each_failure_maps_to_its_message_and_the_flow_recovers(
 ):
     fake_client.fail = raised
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}, data=dict(ENTRY_DATA)
+        DOMAIN, context={"source": SOURCE_USER}, data=_form()
     )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": expected}
-    # What was typed comes back for correction, except the password.
+    # What was typed comes back for correction, except the password, and the
+    # Advanced section opens in case the fault is in there.
     assert (
         _field(result["data_schema"], CONF_HOST).description["suggested_value"] == HOST
     )
     _password_is_not_echoed(result)
+    advanced = _advanced(result)
+    assert advanced.options["collapsed"] is False
+    assert _field(advanced.schema, CONF_PORT).description["suggested_value"] == 443
 
     # The unit answers on the retry: the same flow finishes.
     fake_client.fail = None
-    done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], dict(ENTRY_DATA)
-    )
+    done = await hass.config_entries.flow.async_configure(result["flow_id"], _form())
     assert done["type"] is FlowResultType.CREATE_ENTRY
     assert done["result"].unique_id == SERIAL
     assert done["data"][CONF_PASSWORD] == ENTRY_DATA[CONF_PASSWORD]
@@ -147,12 +185,14 @@ async def test_the_same_unit_at_a_new_address_updates_the_existing_entry(
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
-        data={
-            **ENTRY_DATA,
-            CONF_HOST: "192.0.2.16",
-            CONF_PORT: 8443,
-            CONF_PASSWORD: "rotated",
-        },
+        data=_form(
+            {
+                **ENTRY_DATA,
+                CONF_HOST: "192.0.2.16",
+                CONF_PORT: 8443,
+                CONF_PASSWORD: "rotated",
+            }
+        ),
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
@@ -208,15 +248,22 @@ def test_the_txt_mac_is_base64_of_the_twelve_hex_digits():
     assert normalise_mac(None) is None
 
 
-async def test_a_discovered_unit_asks_for_its_login_and_is_added(hass, fake_client):
+async def test_a_discovered_unit_asks_only_for_its_password_and_is_added(
+    hass, fake_client
+):
     result = await _discover(hass)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "zeroconf_confirm"
     assert result["description_placeholders"] == {"host": "192.0.2.30"}
+    assert list(result["data_schema"].schema) == [CONF_PASSWORD, CONF_ADVANCED]
     _password_is_not_echoed(result)
+    advanced = _advanced(result)
+    assert advanced.options["collapsed"] is True
+    defaults = {str(k): k.default() for k in advanced.schema.schema}
+    assert defaults == {CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
 
     done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "secret"}
+        result["flow_id"], {CONF_PASSWORD: "secret"}
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
     # The address and port came from the announcement; the serial, which the
@@ -225,21 +272,30 @@ async def test_a_discovered_unit_asks_for_its_login_and_is_added(hass, fake_clie
     assert done["data"][CONF_HOST] == "192.0.2.30"
     assert done["data"][CONF_PORT] == 443
     assert done["data"][CONF_MAC] == UNIT_MAC
+    assert done["data"][CONF_USERNAME] == "admin"
+    assert done["data"][CONF_VERIFY_SSL] is False
 
 
 async def test_a_discovered_unit_that_refuses_the_login_recovers(hass, fake_client):
     result = await _discover(hass)
     fake_client.fail = GlkvmAuthError("no")
     shown = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "wrong"}
+        result["flow_id"],
+        {CONF_PASSWORD: "wrong", CONF_ADVANCED: {CONF_USERNAME: "root"}},
     )
     assert shown["type"] is FlowResultType.FORM
     assert shown["errors"] == {"base": "invalid_auth"}
     _password_is_not_echoed(shown)
+    # The login may be what is wrong, so Advanced opens with it as typed.
+    advanced = _advanced(shown)
+    assert advanced.options["collapsed"] is False
+    assert _field(advanced.schema, CONF_USERNAME).description["suggested_value"] == (
+        "root"
+    )
 
     fake_client.fail = None
     done = await hass.config_entries.flow.async_configure(
-        shown["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "right"}
+        shown["flow_id"], {CONF_PASSWORD: "right"}
     )
     assert done["type"] is FlowResultType.CREATE_ENTRY
     assert done["data"][CONF_PASSWORD] == "right"
@@ -352,7 +408,7 @@ async def test_an_entry_added_before_the_mac_was_stored_is_still_recognised(
     result = await _discover(hass)
     assert result["type"] is FlowResultType.FORM
     done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "secret"}
+        result["flow_id"], {CONF_PASSWORD: "secret"}
     )
     assert done["type"] is FlowResultType.ABORT
     assert done["reason"] == "already_configured"

@@ -2,6 +2,16 @@
 
 Everything a user of this integration would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the version numbers are the ones in `manifest.json`. Changes that only move code around, or that touch tests and CI, are not listed unless they change what the integration does.
 
+## [0.3.0] - 2026-10-30
+
+### Changed
+
+- Setting a unit up by hand asks for its IP address and password. The port, the username and the certificate check sit in a collapsed Advanced section with their defaults: 443, `admin` (the one login stock firmware has) and off.
+- Adding a discovered unit asks only for its password; the username and the certificate check sit in Advanced.
+- Reconfigure and reauthentication fill an empty username with `admin` too. A unit with authentication disabled accepts any login, so this changes nothing there.
+- When the unit cannot be reached or refuses the login, the form opens Advanced and keeps everything typed except the password.
+- The README opens the repository in HACS and starts the setup with My Home Assistant buttons, and no longer asks for a custom repository: GL.iNet KVM is in the HACS default list.
+
 ## [0.2.3] - 2026-10-23
 
 ### Fixed
@@ -21,7 +31,7 @@ Everything a user of this integration would notice, newest first. The format fol
 
 ### Fixed
 
-- Wake-on-LAN target names are redacted from downloadable diagnostics. The name is the label the unit stores for a machine on your LAN, in practice that machine's hostname, and it went out in clear in a file people attach to public issues. Stored image filenames use the same key and stay in clear, so the report still shows what the virtual drive is presenting.
+- Wake-on-LAN target names are redacted from downloadable diagnostics. The name is the label the unit stores for a machine on your LAN, in practice that machine's hostname. Stored image filenames use the same key and stay in clear, so the report still shows what the virtual drive is presenting.
 - User-GPIO channel names are redacted from downloadable diagnostics. The channel name is the one you gave it in the unit's GPIO scheme, so it names hardware in your house. Each channel's direction, switch, pulse delay and state stay in clear.
 
 ## [0.2.0] - 2026-09-05

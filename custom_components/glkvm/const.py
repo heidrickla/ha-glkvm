@@ -7,13 +7,20 @@ NAME = "GL.iNet KVM"
 MANUFACTURER = "GL.iNet"
 
 # Must match manifest.json; tools/validate_local.py refuses a mismatch.
-VERSION = "0.2.3"
+VERSION = "0.3.0"
 
 # The kvmd API is served over HTTPS with a self-signed certificate (CN
 # "localhost", issued by "GLKVM"), so verification is off by default. A user
 # who has installed their own certificate can turn it on.
 DEFAULT_PORT = 443
 DEFAULT_VERIFY_SSL = False
+
+# Stock firmware has one kvmd user, admin; its web interface asks only for
+# the password. A unit with authentication disabled accepts any login.
+DEFAULT_USERNAME = "admin"
+
+# The setup forms' collapsed section holding what has a working default.
+CONF_ADVANCED = "advanced"
 
 # Entry data: SHA-256 of the certificate the unit presented at its last setup.
 # A discovered address is trusted with the entry's credentials only over a

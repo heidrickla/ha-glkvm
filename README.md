@@ -76,20 +76,28 @@ The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not a 
 
 - Home Assistant 2026.3 or newer. That is the release that reads a custom integration's brand images from its own folder; the code itself uses nothing newer than 2025.4.
 - A GL.iNet KVM reachable from Home Assistant on your LAN, by IP address.
-- Its login, unless you have disabled authentication on the unit.
+- Its password, unless you have disabled authentication on the unit.
 - Stock firmware. Every call goes to stock kvmd and GL.iNet endpoints over `https://<unit>`. No module the glkvm-firmware project patches (Redfish, OCR, VNC, port 8888, Prometheus export) is on a path this integration uses. Two settings change what you see, both lines in the unit's `/etc/kvmd/override.yaml`; Known limitations names them.
 
 ## Installation
 
-HACS (custom repository): add this repository as a custom repository of type Integration, install, restart Home Assistant.
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=heidrickla&repository=ha-glkvm&category=integration)
 
-Manual: copy `custom_components/glkvm/` into your Home Assistant `config/custom_components/` directory and restart.
+1. Press the button above, then Download in HACS, and restart Home Assistant when it asks.
+2. A unit on the same network as Home Assistant usually shows up by itself under Settings -> Devices & Services as Discovered. Press Add on it and go to step 4.
+3. Otherwise press this button to start the setup:
 
-Then Settings -> Devices & Services -> Add Integration -> GL.iNet KVM.
+[![Open your Home Assistant instance and start setting up GL.iNet KVM.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=glkvm)
+
+4. GL.iNet KVM: enter the unit's IP address (a discovered unit has it already) and the password you set in its web interface, and press Submit.
+
+The Advanced section of that screen holds the port, the username and the certificate check; the defaults fit a stock unit. If the unit cannot be reached or refuses the login, the screen says so, opens Advanced and keeps what you typed.
+
+Without the buttons: HACS, search for GL.iNet KVM, download it and restart; then Settings -> Devices & Services -> Add Integration -> GL.iNet KVM. Manual install: copy `custom_components/glkvm/` into your Home Assistant `config/custom_components/` directory and restart.
 
 ### Discovery
 
-Units on the same network as Home Assistant announce themselves over mDNS (`_glinet._tcp.local.`) and appear under Settings -> Devices & Services as a discovered device. Adding one that way asks only for the login and the certificate check; the address and port come from the announcement, and the serial the entry is keyed on is read from the unit once the login is accepted.
+Units on the same network as Home Assistant announce themselves over mDNS (`_glinet._tcp.local.`) and appear under Settings -> Devices & Services as a discovered device. Adding one that way asks only for the password; the address and port come from the announcement, and the serial the entry is keyed on is read from the unit once the login is accepted.
 
 The announcement carries the unit's MAC address, and Home Assistant stores it with the entry. That is what lets a unit that changes IP address, on a DHCP lease renewal or a move to another subnet, be recognised as the one you already have: the entry follows it to the new address instead of offering you a second copy of the same KVM. A unit added by hand gets its MAC stored at setup, so it is discoverable when it later moves.
 
@@ -99,12 +107,13 @@ If your network does not carry mDNS between Home Assistant and the unit, add it 
 
 ### Installation parameters
 
-| Field | Meaning |
-|---|---|
-| Host | The unit's LAN IP address. Prefer the IP to a `.local` name: with more than one unit, mDNS can answer for the wrong one. |
-| Port | 443 unless you have moved the web interface. |
-| Username, Password | The unit's login. Leave both empty if authentication is disabled on the unit. |
-| Verify the KVM's certificate | Off by default. The unit ships a self-signed certificate for `localhost`; turn this on only if you have installed your own. |
+| Field | Where | Meaning |
+|---|---|---|
+| Host | First screen (by hand only) | The unit's LAN IP address. Prefer the IP to a `.local` name: with more than one unit, mDNS can answer for the wrong one. |
+| Password | First screen | The password set in the unit's web interface. Leave it empty if authentication is disabled on the unit, which then accepts any login. |
+| Port | Advanced (by hand only) | 443 unless you have moved the web interface. |
+| Username | Advanced | `admin`, the one login stock firmware has. |
+| Verify the KVM's certificate | Advanced | Off by default. The unit ships a self-signed certificate for `localhost`; turn this on only if you have installed your own. |
 
 Setup checks the credentials against the unit and reads its serial number before the entry is created, so a wrong password or a wrong address is caught on the form. The serial is the entry's unique id: adding a unit that is already configured updates its existing entry with the address, port and credentials you just entered instead of creating a second one. When the form comes back with an error, everything you typed is kept except the password.
 
@@ -218,7 +227,6 @@ sequence:
 - Virtual media is offline on a stock 1.10.0 unit. That firmware ships the mass-storage functions unlinked from the USB gadget. Enabling USB functions in GL.iNet's own web UI fixes it without a shell (it writes the same keys to the unit's `boot.yaml`); so does setting `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` in `override.yaml` and rebooting. A repair issue says so. Images smaller than 614,400 bytes are rejected by the unit's kernel.
 - Power control needs GL.iNet's ATX board. Without it the power switch and the three buttons are unavailable, and the `power` action refuses.
 - Keyboard connected and Mouse connected are lazy. kvmd updates them on the next successful write, so a host that has stopped polling the gadget still reads connected until something is typed.
-- Authentication is per request. The unit accepts the credentials as headers on every call. A unit with authentication disabled accepts whatever you enter.
 - Discovery needs mDNS to reach Home Assistant. The announcement is filtered on the model, so only Comet KVMs are offered; a unit on a segment that does not forward mDNS has to be added by address. A unit whose entry has no stored MAC yet is offered as a new device until its serial is read, at which point it is recognised and its address updated rather than duplicated.
 
 ## Troubleshooting

@@ -1,6 +1,6 @@
 [project]
 name = "ha-glkvm"
-version = "0.2.3"
+version = "0.3.0"
 description = "Home Assistant integration for GL.iNet Comet KVMs."
 # Home Assistant 2026.x requires 3.14, and ruff at target-version py314 writes
 # except groups unparenthesized, which 3.13 refuses to parse.

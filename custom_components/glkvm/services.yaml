@@ -1,4 +1,4 @@
-# Names and descriptions live in strings.json (the translatable layer); this
+# Names and descriptions live in translations/en.json (the translatable layer); this
 # file carries only structure.
 type_text:
   fields:
