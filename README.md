@@ -2,6 +2,16 @@
 
 Local (no cloud) Home Assistant integration for GL.iNet Comet KVM-over-IP units: the host's power, its screen, the virtual USB drive, the keyboard and mouse gadget, Wake-on-LAN, and the KVM's own health, all as entities on one device. Built and verified against a GL-RM10 (Comet Pro) on firmware 1.10.0. Everything talks to the unit over your LAN through the same API its own web interface uses.
 
+## Screenshots
+
+![The GL.iNet KVM setup screen asking for the address and password](docs/images/setup.png)
+
+Setup asks for the address and password; a discovered unit asks only for the password.
+
+![The GL.iNet KVM device page with power, virtual media and capture entities](docs/images/device.png)
+
+The device page, captured against the test suite's recorded kvmd answers.
+
 ## What you get
 
 | Entity | Type | What it is |
