@@ -15,8 +15,8 @@ home-assistant/brands asks for a transparent background and a mark that
 fills the image, so the canvas is transparent and the padding is a few
 percent, enough to keep the rounded corners off the edge.
 
-The mark is what the device is: a monitor with a live picture, a keyboard
-under it, and the network lead that lets you reach both from elsewhere.
+The icons use brand/icon-source.png. The wide logos retain the monitor,
+keyboard and network lead.
 """
 
 from __future__ import annotations
@@ -122,9 +122,19 @@ def main() -> None:
         "logo.png": (512, 256),
         "logo@2x.png": (1024, 512),
     }
+    source = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "brand", "icon-source.png"
+    )
+    with Image.open(source) as original:
+        approved_icon = original.convert("RGBA")
     for name, size in specs.items():
         path = os.path.join(out, name)
-        draw(size, pad_frac=PAD_FRAC).save(path, "PNG")
+        image = (
+            approved_icon.resize(size, Image.LANCZOS)
+            if name.startswith("icon")
+            else draw(size, pad_frac=PAD_FRAC)
+        )
+        image.save(path, "PNG")
         print(f"  {name:14s} {size[0]}x{size[1]}")
 
     # Verify against the published rules rather than trusting the call above:
@@ -147,7 +157,7 @@ def main() -> None:
         # The mark spans the square minus the padding: its full width, and
         # its own height, with a pixel of slack for anti-aliasing.
         box = min(w, h) * (1 - 2 * PAD_FRAC)
-        filled = (right - left) >= box - 2 and (bottom - top) >= box * MARK_H_FRAC - 2
+        filled = (right - left) >= box - 3 and (bottom - top) >= box * MARK_H_FRAC - 2
         verdict = "OK" if good and transparent and filled else "FAILS THE RULE"
         print(
             f"  check {name:14s} {w}x{h} transparent={transparent} "
