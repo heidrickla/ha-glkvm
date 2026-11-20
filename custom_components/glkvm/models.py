@@ -13,7 +13,7 @@ a renamed key must degrade to None rather than take the whole poll down.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 # kvmd lists every file on the media partition. Windows leaves this directory
@@ -436,6 +436,134 @@ class WolTarget:
         return tuple(targets)
 
 
+def _name(value: Any) -> str | None:
+    """A user-given label, stripped; None for null, blank or not a string."""
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def port_names_from_config(result: Mapping[str, Any]) -> tuple[str | None, ...] | None:
+    """`config.port_names` out of GL.iNet's /api/system/get_config answer.
+
+    GL's web UI stores one entry per port, null for a port it has no name
+    for. Everything else in that document is the UI's own settings and is
+    not read. None when the key is missing or not a list.
+    """
+    names = _dig(result, "config", "port_names")
+    if not isinstance(names, list):
+        return None
+    return tuple(_name(item) for item in names)
+
+
+@dataclass(frozen=True)
+class SwitchPort:
+    """One input of the multi-port switch, as kvmd's switch model lists it."""
+
+    index: int
+    id: str | None = None
+    name: str | None = None
+    unit: int | None = None
+    channel: int | None = None
+
+
+@dataclass(frozen=True)
+class SwitchState:
+    """The built-in KVM switch of a GL-RM4PE (Comet X), from /api/switch.
+
+    `active_port` is 0-based, as kvmd counts; the labels printed on the unit
+    and everything user-facing in this integration count from 1. kvmd
+    reports -1 when no port is selected, which is None here.
+
+    Port names come from two places. GL.iNet's web UI keeps its own in the
+    user config (`ui_names`, filled in by the coordinator from
+    /api/system/get_config); kvmd's switch model carries a name per port too,
+    which on the RM4PE does not survive a kvmd restart. `label()` prefers
+    the UI's, then kvmd's, then "Port N".
+    """
+
+    active_port: int | None = None
+    active_id: str | None = None
+    synced: bool | None = None
+    video_links: tuple[bool | None, ...] = ()
+    usb_links: tuple[bool | None, ...] = ()
+    ports: tuple[SwitchPort, ...] = ()
+    ui_names: tuple[str | None, ...] = ()
+
+    @property
+    def port_count(self) -> int:
+        return len(self.ports) if self.ports else len(self.video_links)
+
+    def label(self, index: int) -> str:
+        """The name to show for a 0-based port."""
+        if 0 <= index < len(self.ui_names) and self.ui_names[index]:
+            return str(self.ui_names[index])
+        if 0 <= index < len(self.ports) and self.ports[index].name:
+            return str(self.ports[index].name)
+        return f"Port {index + 1}"
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        """One distinct label per port, in port order.
+
+        Names are typed by people, so two ports can share one, or one can
+        read the same as another port's "Port N" fallback. A select needs
+        distinct options, so a repeated label gets its port number appended.
+        """
+        bases = [self.label(i) for i in range(self.port_count)]
+        seen: set[str] = set()
+        labels: list[str] = []
+        for index, base in enumerate(bases):
+            candidate = base
+            if bases.count(base) > 1:
+                candidate = f"{base} ({index + 1})"
+            while candidate in seen:
+                candidate = f"{candidate} ({index + 1})"
+            seen.add(candidate)
+            labels.append(candidate)
+        return tuple(labels)
+
+    def video_link(self, index: int) -> bool | None:
+        """Whether a source is putting out video on a 0-based port's HDMI."""
+        if 0 <= index < len(self.video_links):
+            return self.video_links[index]
+        return None
+
+    def with_ui_names(self, names: tuple[str | None, ...] | None) -> SwitchState:
+        return replace(self, ui_names=tuple(names or ()))
+
+    @classmethod
+    def from_result(cls, result: Mapping[str, Any]) -> SwitchState:
+        active = _as_int(_dig(result, "summary", "active_port"))
+        listed = _dig(result, "model", "ports")
+        ports: list[SwitchPort] = []
+        if isinstance(listed, list):
+            for index, item in enumerate(listed):
+                ports.append(
+                    SwitchPort(
+                        index=index,
+                        id=_as_str(_dig(item, "id")),
+                        name=_name(_dig(item, "name")),
+                        unit=_as_int(_dig(item, "unit")),
+                        channel=_as_int(_dig(item, "channel")),
+                    )
+                )
+        return cls(
+            active_port=active if active is not None and active >= 0 else None,
+            active_id=_as_str(_dig(result, "summary", "active_id")),
+            synced=_as_bool(_dig(result, "summary", "synced")),
+            video_links=_links(_dig(result, "video", "links")),
+            usb_links=_links(_dig(result, "usb_otg", "links")),
+            ports=tuple(ports),
+        )
+
+
+def _links(value: Any) -> tuple[bool | None, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(_as_bool(item) for item in value)
+
+
 @dataclass
 class KvmData:
     """One poll's worth of state.
@@ -452,4 +580,7 @@ class KvmData:
     gpio: GpioState | None = None
     health: Health | None = None
     wol: tuple[WolTarget, ...] = field(default_factory=tuple)
+    # None on every unit without the built-in switch, which is all but the
+    # GL-RM4PE; that is absence, not a failure.
+    switch: SwitchState | None = None
     failed: tuple[str, ...] = field(default_factory=tuple)

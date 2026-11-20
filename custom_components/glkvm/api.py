@@ -46,8 +46,10 @@ from .models import (
     MsdState,
     NetworkConfig,
     StreamerState,
+    SwitchState,
     SystemInfo,
     WolTarget,
+    port_names_from_config,
 )
 from .totp import normalise_secret, totp
 
@@ -368,6 +370,36 @@ class GlkvmClient:
             raise
         return WolTarget.list_from_result(self._mapping(result))
 
+    async def get_switch(self) -> SwitchState | None:
+        """The multi-port switch (GL-RM4PE); None on units without one.
+
+        kvmd registers /api/switch only where the switch hardware exists, so
+        every other Comet answers 404.
+        """
+        try:
+            result = await self._get("/api/switch")
+        except GlkvmResponseError as err:
+            if err.status == 404:
+                return None
+            raise
+        return SwitchState.from_result(self._mapping(result))
+
+    async def get_port_names(self) -> tuple[str | None, ...] | None:
+        """The port names set in GL.iNet's web UI, by 0-based port.
+
+        GL's UI keeps them in its user config (/etc/kvmd/user/config.json),
+        served whole by /api/system/get_config; kvmd's own switch port names
+        do not survive a restart on the RM4PE. Only `port_names` is read out
+        of that document. None where the endpoint or the key is absent.
+        """
+        try:
+            result = await self._get("/api/system/get_config")
+        except GlkvmResponseError as err:
+            if err.status == 404:
+                return None
+            raise
+        return port_names_from_config(self._mapping(result))
+
     async def get_snapshot(self) -> bytes | None:
         """The current frame as JPEG, or None while the streamer has no frame."""
         status, ctype, body = await self._call(
@@ -472,6 +504,15 @@ class GlkvmClient:
         await self._post(
             "/api/gpio/pulse", params={"channel": channel, "wait": _flag(wait)}
         )
+
+    async def switch_set_active(self, port: int) -> None:
+        """Switch the KVM to a port, 0-based on the wire.
+
+        kvmd answers once the switch has happened, about 2.5 s on a GL-RM4PE.
+        """
+        if isinstance(port, bool) or not isinstance(port, int) or port < 0:
+            raise ValueError(f"invalid switch port {port!r}")
+        await self._post("/api/switch/set_active", params={"port": str(port)})
 
     async def wol_wake(self, mac: str) -> None:
         """Send a magic packet from the KVM to a machine on its LAN."""

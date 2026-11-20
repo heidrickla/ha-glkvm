@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "result": {
+    "model": {
+      "firmware": {"version": 0},
+      "units": [],
+      "ports": [
+        {"unit": 0, "channel": 0, "name": "", "id": "1.1", "atx": {"click_delays": {"power": 0.5, "power_long": 5.5, "reset": 0.5}}, "video": {"dummy": false}},
+        {"unit": 0, "channel": 1, "name": "", "id": "1.2", "atx": {"click_delays": {"power": 0.5, "power_long": 5.5, "reset": 0.5}}, "video": {"dummy": false}},
+        {"unit": 0, "channel": 2, "name": "", "id": "1.3", "atx": {"click_delays": {"power": 0.5, "power_long": 5.5, "reset": 0.5}}, "video": {"dummy": false}},
+        {"unit": 0, "channel": 3, "name": "", "id": "1.4", "atx": {"click_delays": {"power": 0.5, "power_long": 5.5, "reset": 0.5}}, "video": {"dummy": false}}
+      ],
+      "limits": {"atx": {"click_delays": {"power": {"default": 0.5, "min": 0, "max": 10}, "power_long": {"default": 5.5, "min": 0, "max": 10}, "reset": {"default": 0.5, "min": 0, "max": 10}}}}
+    },
+    "summary": {"active_id": "1.1", "active_port": 0, "synced": true},
+    "video": {"links": [true, false, true, true]},
+    "usb_otg": {"links": [true, false, false, false]},
+    "usb_host": false,
+    "beacons": {"uplinks": [], "downlinks": [], "ports": []},
+    "atx": {"busy": [], "leds": {"power": [], "hdd": []}}
+  }
+}
