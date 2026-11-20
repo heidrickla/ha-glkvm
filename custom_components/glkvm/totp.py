@@ -29,18 +29,16 @@ def normalise_secret(secret: str) -> str:
 
     Authenticator apps and setup pages group the secret in blocks, print it
     in lower case and drop the `=` padding; all three are accepted. Raises
-    ValueError when what is left is not base32 or decodes to nothing.
+    ValueError when what is left is empty or not base32.
     """
     cleaned = "".join(secret.split()).replace("-", "").upper().rstrip("=")
     if not cleaned:
         raise ValueError("empty TOTP secret")
     padded = cleaned + "=" * (-len(cleaned) % 8)
     try:
-        key = base64.b32decode(padded, casefold=False)
+        base64.b32decode(padded, casefold=False)
     except (binascii.Error, ValueError) as err:
         raise ValueError("TOTP secret is not base32") from err
-    if not key:
-        raise ValueError("TOTP secret decodes to nothing")
     return cleaned
 
 
