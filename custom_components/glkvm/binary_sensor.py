@@ -1,4 +1,4 @@
-"""Binary sensors: video signal, the HID gadget's two halves, and GPIO inputs."""
+"""Binary sensors: video signal, the HID gadget, GPIO inputs, and port video."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import SECTION_GPIO, SECTION_HID, SECTION_STREAMER
+from .const import SECTION_GPIO, SECTION_HID, SECTION_STREAMER, SECTION_SWITCH
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
-from .entity import GlkvmEntity
+from .entity import GlkvmEntity, add_switch_entities
 from .models import GpioChannel, KvmData
 
 # Read from values already in the coordinator; nothing to serialise.
@@ -86,6 +86,14 @@ async def async_setup_entry(
             for channel in coordinator.data.gpio.inputs
         )
     async_add_entities(entities)
+    add_switch_entities(
+        entry,
+        async_add_entities,
+        lambda switch: [
+            GlkvmPortVideoSensor(coordinator, index)
+            for index in range(switch.port_count)
+        ],
+    )
 
 
 class GlkvmBinarySensor(GlkvmEntity, BinarySensorEntity):
@@ -142,3 +150,35 @@ class GlkvmGpioInput(GlkvmEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         current = self._current()
         return current.state if current else None
+
+
+class GlkvmPortVideoSensor(GlkvmEntity, BinarySensorEntity):
+    """Whether a source is plugged in and powered on one GL-RM4PE port's HDMI.
+
+    Named and keyed by the port number printed on the unit (1 to 4), never by
+    the port's name, which the user can change at any time.
+    """
+
+    _attr_translation_key = "port_video"
+    _attr_device_class = BinarySensorDeviceClass.PLUG
+
+    def __init__(self, coordinator: GlkvmCoordinator, index: int) -> None:
+        super().__init__(coordinator, f"port_{index + 1}_video", section=SECTION_SWITCH)
+        self._index = index
+        self._attr_translation_placeholders = {"port": str(index + 1)}
+
+    @property
+    @override
+    def available(self) -> bool:
+        switch = self.data.switch
+        return (
+            super().available
+            and switch is not None
+            and switch.video_link(self._index) is not None
+        )
+
+    @property
+    @override
+    def is_on(self) -> bool | None:
+        switch = self.data.switch
+        return switch.video_link(self._index) if switch else None

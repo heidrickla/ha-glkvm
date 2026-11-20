@@ -34,11 +34,12 @@ from .const import (
     SECTION_HID,
     SECTION_MSD,
     SECTION_STREAMER,
+    SECTION_SWITCH,
     SECTION_WOL,
     SECTIONS,
     STREAMER_STOPPED_POLLS,
 )
-from .models import FirmwareInfo, KvmData, SystemInfo
+from .models import FirmwareInfo, KvmData, SwitchState, SystemInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +51,8 @@ type GlkvmConfigEntry = ConfigEntry[GlkvmCoordinator]
 class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
     """Reads the KVM's state and owns the client.
 
-    Each section (ATX, MSD, streamer, HID, GPIO, health, WOL) is read on its
+    Each section (ATX, MSD, streamer, HID, GPIO, health, WOL, and the
+    GL-RM4PE's port switch) is read on its
     own rather than through the bare /api/info, which GL.iNet's firmware
     makes expensive, and each is allowed to fail on its own: a 500 from one
     endpoint leaves the rest live and names that section in KvmData.failed,
@@ -184,7 +186,7 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
 
         client = self.client
         # One credential check before the concurrent reads, so a changed
-        # password costs one failed login towards GL.iNet's lockout, not seven.
+        # password costs one failed login towards GL.iNet's lockout, not eight.
         # Any other failure here is left to the section reads to report.
         try:
             await client.check_auth()
@@ -197,8 +199,9 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
         except GlkvmError as err:
             _LOGGER.debug("Credential check failed: %s", err)
 
-        # Six in the gather and one after: typeshed types gather for up to six
-        # positional awaitables, and a seventh collapses the result to a union.
+        # Six in one gather and two in another: typeshed types gather for up to
+        # six positional awaitables, and a seventh collapses the result to a
+        # union.
         atx, msd, streamer, hid, gpio, health = await asyncio.gather(
             guard(SECTION_ATX, client.get_atx),
             guard(SECTION_MSD, client.get_msd),
@@ -207,7 +210,10 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             guard(SECTION_GPIO, client.get_gpio),
             guard(SECTION_HEALTH, client.get_health),
         )
-        wol = await guard(SECTION_WOL, client.get_wol_targets)
+        wol, switch = await asyncio.gather(
+            guard(SECTION_WOL, client.get_wol_targets),
+            guard(SECTION_SWITCH, self._read_switch),
+        )
 
         if auth_failures:
             # Stop here rather than retry: the next poll with the same
@@ -236,10 +242,33 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
             # section", so it must not be back-filled from a previous poll.
             health=health,
             wol=wol if wol is not None else previous.wol,
+            # None is also "this unit has no switch" (a 404), so only a read
+            # that failed keeps the previous value.
+            switch=previous.switch if SECTION_SWITCH in failed else switch,
             failed=tuple(failed),
         )
         self._update_issues(data)
         return data
+
+    async def _read_switch(self) -> SwitchState | None:
+        """The port switch with GL's port names; None on a unit without one."""
+        state = await self.client.get_switch()
+        if state is None:
+            return None
+        return state.with_ui_names(await self._read_port_names())
+
+    async def _read_port_names(self) -> tuple[str | None, ...] | None:
+        """GL's web UI port names. Decoration: a failure keeps the last ones.
+
+        Not a section of its own and never a poll failure: without names the
+        ports read "Port 1" to "Port 4", which still works.
+        """
+        try:
+            return await self.client.get_port_names()
+        except GlkvmError as err:
+            _LOGGER.debug("Could not read the port names: %s", err)
+            previous = self.data.switch if self.data else None
+            return previous.ui_names if previous else None
 
     # --------------------------------------------------------------- issues
 

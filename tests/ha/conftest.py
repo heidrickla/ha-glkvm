@@ -48,6 +48,7 @@ from custom_components.glkvm.models import (
     MsdState,
     NetworkConfig,
     StreamerState,
+    SwitchState,
     SystemInfo,
     WolTarget,
 )
@@ -60,6 +61,8 @@ WOL_MAC = "02:00:00:00:00:01"
 # mDNS TXT record carries it (base64 of the twelve hex digits).
 UNIT_MAC = "94:83:c4:00:02:15"
 UNIT_MAC_TXT = "OTQ4M2M0MDAwMjE1"
+# A GL-RM4PE's switch, from the shape it answers /api/switch with.
+RM4PE_SWITCH = SwitchState.from_result(result("switch_rm4pe.json"))
 # SHA-256 of the certificate the unit presents, as the entry stores it.
 UNIT_CERT_SHA256 = "5f" * 32
 
@@ -109,6 +112,10 @@ class FakeClient:
     network: NetworkConfig | None = field(
         default_factory=lambda: NetworkConfig.from_result(result("network_config.json"))
     )
+    # The GL-RM10 the fixtures come from has no port switch; a test that
+    # wants one sets RM4PE_SWITCH (and port names) here.
+    switch: SwitchState | None = None
+    port_names: tuple[str | None, ...] | None = None
     snapshot: bytes | None = b"\xff\xd8\xff\xe0jpeg"
     # The certificate whatever answers presents. A client built pinned to
     # another one fails before any request: see fake_client below.
@@ -193,6 +200,14 @@ class FakeClient:
         self._check("wol")
         return self.wol
 
+    async def get_switch(self) -> SwitchState | None:
+        self._check("switch")
+        return self.switch
+
+    async def get_port_names(self) -> tuple[str | None, ...] | None:
+        self._check("port_names")
+        return self.port_names
+
     async def get_snapshot(self) -> bytes | None:
         self._check()
         return self.snapshot
@@ -235,6 +250,9 @@ class FakeClient:
 
     async def wol_wake(self, mac: str) -> None:
         self._record("wol_wake", mac)
+
+    async def switch_set_active(self, port: int) -> None:
+        self._record("switch_set_active", port)
 
 
 @pytest.fixture(autouse=True)

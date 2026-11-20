@@ -39,9 +39,11 @@ CONF_CERT_SHA256 = "cert_sha256"
 # available as a push stream over /api/ws.
 SCAN_INTERVAL = timedelta(seconds=30)
 
-# The seven sections one poll reads, each from its own endpoint. A section
+# The eight sections one poll reads, each from its own endpoint. A section
 # that fails keeps its last value and its name goes in KvmData.failed, which
 # is what makes the entities reading it unavailable rather than stale.
+# SECTION_SWITCH is the GL-RM4PE's built-in port switch; every other unit
+# answers its endpoint with 404, which is absence, not a failure.
 SECTION_ATX = "atx"
 SECTION_MSD = "msd"
 SECTION_STREAMER = "streamer"
@@ -49,6 +51,7 @@ SECTION_HID = "hid"
 SECTION_GPIO = "gpio"
 SECTION_HEALTH = "health"
 SECTION_WOL = "wol"
+SECTION_SWITCH = "switch"
 SECTIONS = (
     SECTION_ATX,
     SECTION_MSD,
@@ -57,6 +60,7 @@ SECTIONS = (
     SECTION_GPIO,
     SECTION_HEALTH,
     SECTION_WOL,
+    SECTION_SWITCH,
 )
 
 # Zeroconf. The units announce _glinet._tcp.local. with TXT mn=<model>,
@@ -78,6 +82,7 @@ SERVICE_TYPE_TEXT = "type_text"
 SERVICE_SEND_KEYS = "send_keys"
 SERVICE_WAKE = "wake"
 SERVICE_POWER = "power"
+SERVICE_SET_ACTIVE_PORT = "set_active_port"
 
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_TEXT = "text"
@@ -86,6 +91,7 @@ ATTR_KEYS = "keys"
 ATTR_MAC = "mac"
 ATTR_ACTION = "action"
 ATTR_WAIT = "wait"
+ATTR_PORT = "port"
 
 # The four ATX power actions kvmd accepts, in the order its own UI lists them.
 POWER_ACTIONS = ["on", "off", "off_hard", "reset_hard"]

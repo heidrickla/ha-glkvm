@@ -120,6 +120,9 @@
       },
       "gpio_input": {
         "name": "{channel}"
+      },
+      "port_video": {
+        "name": "Port {port} video"
       }
     },
     "sensor": {
@@ -155,6 +158,9 @@
       },
       "network_tx_rate": {
         "name": "Network transmit rate"
+      },
+      "active_port": {
+        "name": "Active port"
       }
     },
     "switch": {
@@ -203,6 +209,9 @@
           "usb_hybrid": "Hybrid",
           "usb_touch": "Touch"
         }
+      },
+      "active_port": {
+        "name": "Active port"
       }
     },
     "camera": {
@@ -241,6 +250,12 @@
     },
     "no_atx": {
       "message": "No ATX board is attached to this KVM, so it cannot control the host's power."
+    },
+    "no_switch": {
+      "message": "The KVM {name} has no port switch. Only the GL-RM4PE (Comet X) has one."
+    },
+    "invalid_port": {
+      "message": "{port} is not one of the KVM's ports. It has {count}."
     }
   },
   "issues": {
@@ -266,7 +281,7 @@
   "services": {
     "type_text": {
       "name": "Type text",
-      "description": "Types text into the attached host over the KVM's USB keyboard.",
+      "description": "Types text into the attached host over the KVM's USB keyboard. On a KVM with a port switch, that is the host on the active port.",
       "fields": {
         "config_entry_id": {
           "name": "KVM",
@@ -284,7 +299,7 @@
     },
     "send_keys": {
       "name": "Send keys",
-      "description": "Presses a combination of keys together on the attached host, then releases them.",
+      "description": "Presses a combination of keys together on the attached host, then releases them. On a KVM with a port switch, that is the host on the active port.",
       "fields": {
         "config_entry_id": {
           "name": "KVM",
@@ -325,6 +340,20 @@
         "wait": {
           "name": "Wait",
           "description": "Wait for the KVM to finish the action before returning."
+        }
+      }
+    },
+    "set_active_port": {
+      "name": "Set active port",
+      "description": "Switches a GL-RM4PE (Comet X) to one of its ports. Video, keyboard and mouse follow the switch.",
+      "fields": {
+        "config_entry_id": {
+          "name": "KVM",
+          "description": "The KVM to switch."
+        },
+        "port": {
+          "name": "Port",
+          "description": "The port to switch to, numbered as printed on the unit, from 1."
         }
       }
     }

@@ -32,6 +32,10 @@ REDACT = {
 # hides what the drive is presenting, so the addition cannot be global.
 WOL_REDACT = REDACT | {"name"}
 
+# The port switch only. SwitchPort.name and ui_names are the labels the user
+# gave the ports, in practice the names of the machines behind them.
+SWITCH_REDACT = REDACT | {"name", "ui_names"}
+
 # The user-GPIO sections only. GpioChannel.channel is the name the user gave
 # the channel in kvmd's scheme, so it names household hardware. Direction,
 # switch, pulse delay and state stay in clear.
@@ -61,6 +65,8 @@ async def async_get_config_entry_diagnostics(
         data["wol"] = async_redact_data(data["wol"], WOL_REDACT)
     if data.get("gpio"):
         data["gpio"] = async_redact_data(data["gpio"], GPIO_REDACT)
+    if data.get("switch"):
+        data["switch"] = async_redact_data(data["switch"], SWITCH_REDACT)
     return {
         "config": async_redact_data(dict(entry.data), REDACT),
         "system": async_redact_data(
