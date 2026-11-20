@@ -27,7 +27,12 @@ from custom_components.glkvm.api import (
     GlkvmResponseError,
 )
 from custom_components.glkvm.config_flow import mac_from_txt, normalise_mac
-from custom_components.glkvm.const import CONF_ADVANCED, CONF_CERT_SHA256, DOMAIN
+from custom_components.glkvm.const import (
+    CONF_ADVANCED,
+    CONF_CERT_SHA256,
+    CONF_TOTP_SECRET,
+    DOMAIN,
+)
 
 from .conftest import (
     ENTRY_DATA,
@@ -64,6 +69,18 @@ def _form(data=ENTRY_DATA):
         **{k: v for k, v in data.items() if k not in _DEFAULTED},
         CONF_ADVANCED: {k: data[k] for k in _DEFAULTED if k in data},
     }
+
+
+def _defaults(advanced: section) -> dict:
+    """What each Advanced field opens holding.
+
+    The TOTP secret is the one field there with no default: it is a secret,
+    so like the password it is never given one. It must be there, empty.
+    """
+    keys = list(advanced.schema.schema)
+    totp = next(k for k in keys if k == CONF_TOTP_SECRET)
+    assert totp.default is vol.UNDEFINED
+    return {str(k): k.default() for k in keys if k is not totp}
 
 
 def _password_is_not_echoed(result) -> None:
@@ -133,7 +150,7 @@ async def test_the_first_form_asks_only_for_the_address_and_password(hass, fake_
     _password_is_not_echoed(result)
     advanced = _advanced(result)
     assert advanced.options["collapsed"] is True
-    defaults = {str(k): k.default() for k in advanced.schema.schema}
+    defaults = _defaults(advanced)
     assert defaults == {CONF_PORT: 443, CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
 
     # Typing the two and pressing Submit is the whole setup.
@@ -261,7 +278,7 @@ async def test_a_discovered_unit_asks_only_for_its_password_and_is_added(
     _password_is_not_echoed(result)
     advanced = _advanced(result)
     assert advanced.options["collapsed"] is True
-    defaults = {str(k): k.default() for k in advanced.schema.schema}
+    defaults = _defaults(advanced)
     assert defaults == {CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
 
     done = await hass.config_entries.flow.async_configure(

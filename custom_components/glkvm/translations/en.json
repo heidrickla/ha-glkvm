@@ -20,12 +20,14 @@
             "data": {
               "port": "Port",
               "username": "Username",
-              "verify_ssl": "Verify the KVM's certificate"
+              "verify_ssl": "Verify the KVM's certificate",
+              "totp_secret": "Two-factor secret"
             },
             "data_description": {
               "port": "443 unless you have moved the web interface.",
               "username": "admin on stock firmware, which has no other login.",
-              "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+              "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one.",
+              "totp_secret": "Only if two-factor authentication is on: the base32 secret the KVM showed when 2FA was set up (the text under its QR code). Spaces and lower case are fine. Leave empty otherwise."
             }
           }
         }
@@ -45,11 +47,13 @@
             "description": "The defaults fit a stock unit.",
             "data": {
               "username": "Username",
-              "verify_ssl": "Verify the KVM's certificate"
+              "verify_ssl": "Verify the KVM's certificate",
+              "totp_secret": "Two-factor secret"
             },
             "data_description": {
               "username": "admin on stock firmware, which has no other login.",
-              "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one."
+              "verify_ssl": "Leave off unless you have installed your own trusted certificate; the KVM ships a self-signed one.",
+              "totp_secret": "Only if two-factor authentication is on: the base32 secret the KVM showed when 2FA was set up (the text under its QR code). Spaces and lower case are fine. Leave empty otherwise."
             }
           }
         }
@@ -62,6 +66,7 @@
           "port": "Port",
           "username": "Username",
           "password": "Password",
+          "totp_secret": "Two-factor secret",
           "verify_ssl": "Verify the KVM's certificate"
         },
         "data_description": {
@@ -69,6 +74,7 @@
           "port": "443 unless you have moved the web interface.",
           "username": "admin on stock firmware, which has no other login.",
           "password": "The KVM's password. Leave empty to keep the current one.",
+          "totp_secret": "The base32 2FA secret, if two-factor authentication is on. Leave empty to keep the current one.",
           "verify_ssl": "Leave off unless you have installed your own trusted certificate."
         }
       },
@@ -77,18 +83,21 @@
         "description": "The KVM at {host} rejected the credentials. Enter them again.",
         "data": {
           "username": "Username",
-          "password": "Password"
+          "password": "Password",
+          "totp_secret": "Two-factor secret"
         },
         "data_description": {
           "username": "admin on stock firmware, which has no other login.",
-          "password": "The KVM's password."
+          "password": "The KVM's password.",
+          "totp_secret": "The base32 2FA secret, if two-factor authentication is on. Leave empty if it is off; an empty field removes a stored secret."
         }
       }
     },
     "error": {
       "invalid_auth": "The KVM rejected the username or password.",
       "cannot_connect": "Could not reach a KVM at that address.",
-      "unknown": "Unexpected error talking to the KVM."
+      "unknown": "Unexpected error talking to the KVM.",
+      "invalid_totp_secret": "The two-factor secret is not a base32 secret. Copy the text shown under the QR code when 2FA was set up."
     },
     "abort": {
       "already_configured": "This KVM is already configured.",

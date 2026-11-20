@@ -34,6 +34,7 @@ from .api import (
 from .const import (
     CONF_ADVANCED,
     CONF_CERT_SHA256,
+    CONF_TOTP_SECRET,
     DEFAULT_PORT,
     DEFAULT_USERNAME,
     DEFAULT_VERIFY_SSL,
@@ -41,6 +42,7 @@ from .const import (
     NAME,
     ZEROCONF_MAC,
 )
+from .totp import normalise_secret
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +87,7 @@ def _client(
         password=data.get(CONF_PASSWORD) or None,
         verify_ssl=verify_ssl,
         cert_sha256=cert_sha256,
+        totp_secret=data.get(CONF_TOTP_SECRET) or None,
     )
 
 
@@ -159,6 +162,8 @@ _PASSWORD = selector.TextSelector(
 
 _USERNAME = vol.Required(CONF_USERNAME, default=DEFAULT_USERNAME)
 _VERIFY_SSL = vol.Required(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL)
+# Masked like the password, and like it never given a default or sent back.
+_TOTP_SECRET = vol.Optional(CONF_TOTP_SECRET)
 
 
 def _advanced(fields: dict[Any, Any], *, collapsed: bool) -> dict[Any, Any]:
@@ -187,6 +192,7 @@ def _user_schema(*, collapsed: bool) -> vol.Schema:
                     vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
                     _USERNAME: str,
                     _VERIFY_SSL: bool,
+                    _TOTP_SECRET: _PASSWORD,
                 },
                 collapsed=collapsed,
             ),
@@ -200,7 +206,10 @@ def _discovery_schema(*, collapsed: bool) -> vol.Schema:
     return vol.Schema(
         {
             vol.Optional(CONF_PASSWORD): _PASSWORD,
-            **_advanced({_USERNAME: str, _VERIFY_SSL: bool}, collapsed=collapsed),
+            **_advanced(
+                {_USERNAME: str, _VERIFY_SSL: bool, _TOTP_SECRET: _PASSWORD},
+                collapsed=collapsed,
+            ),
         }
     )
 
@@ -212,6 +221,7 @@ _RECONFIGURE_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
         _USERNAME: str,
         vol.Optional(CONF_PASSWORD): _PASSWORD,
+        _TOTP_SECRET: _PASSWORD,
         _VERIFY_SSL: bool,
     }
 )
@@ -220,13 +230,41 @@ _REAUTH_SCHEMA = vol.Schema(
     {
         _USERNAME: str,
         vol.Optional(CONF_PASSWORD): _PASSWORD,
+        _TOTP_SECRET: _PASSWORD,
     }
 )
 
+_SECRETS = (CONF_PASSWORD, CONF_TOTP_SECRET)
 
-def _without_password(data: Mapping[str, Any]) -> dict[str, Any]:
-    """What may go back to the browser as suggested values: never the secret."""
-    return {k: v for k, v in data.items() if k != CONF_PASSWORD}
+
+def _without_secrets(data: Mapping[str, Any]) -> dict[str, Any]:
+    """What may go back to the browser as suggested values: never a secret.
+
+    Recurses into sections: the TOTP secret sits inside Advanced on the
+    first screen.
+    """
+    return {
+        k: _without_secrets(v) if isinstance(v, Mapping) else v
+        for k, v in data.items()
+        if k not in _SECRETS
+    }
+
+
+def _clean_totp(data: dict[str, Any]) -> bool:
+    """Normalise the TOTP secret in `data` in place; False if it is not base32.
+
+    A blank secret is removed rather than stored, so an entry for a unit
+    without two-factor authentication carries no such key.
+    """
+    secret = data.get(CONF_TOTP_SECRET)
+    if not isinstance(secret, str) or not secret.strip():
+        data.pop(CONF_TOTP_SECRET, None)
+        return True
+    try:
+        data[CONF_TOTP_SECRET] = normalise_secret(secret)
+    except ValueError:
+        return False
+    return True
 
 
 def _flatten(user_input: Mapping[str, Any]) -> dict[str, Any]:
@@ -253,9 +291,15 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
     _discovered: dict[str, Any]
 
     async def _async_try(
-        self, data: Mapping[str, Any]
+        self, data: dict[str, Any]
     ) -> tuple[dict[str, str], str | None, str | None, str | None]:
-        """Validate against the unit. Returns (errors, unique id, title, MAC)."""
+        """Validate against the unit. Returns (errors, unique id, title, MAC).
+
+        Normalises the TOTP secret in `data` first, in place, so what is
+        checked against the unit is exactly what the entry will store.
+        """
+        if not _clean_totp(data):
+            return {"base": "invalid_totp_secret"}, None, None, None
         try:
             unique_id, title, mac = await _identify(self.hass, data)
         except GlkvmAuthError:
@@ -285,7 +329,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
-                _user_schema(collapsed=not errors), _without_password(user_input or {})
+                _user_schema(collapsed=not errors), _without_secrets(user_input or {})
             ),
             errors=errors,
         )
@@ -348,7 +392,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="zeroconf_confirm",
             data_schema=self.add_suggested_values_to_schema(
                 _discovery_schema(collapsed=not errors),
-                _without_password(user_input or {}),
+                _without_secrets(user_input or {}),
             ),
             description_placeholders={"host": self._discovered[CONF_HOST]},
             errors=errors,
@@ -367,6 +411,11 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
             data = dict(user_input)
             if not data.get(CONF_PASSWORD):
                 data[CONF_PASSWORD] = entry.data.get(CONF_PASSWORD, "")
+            # The TOTP secret likewise. Turning two-factor off on the unit
+            # makes the stored one fail, and reauthentication, which takes
+            # the fields as typed, is where a blank one clears it.
+            if not data.get(CONF_TOTP_SECRET) and entry.data.get(CONF_TOTP_SECRET):
+                data[CONF_TOTP_SECRET] = entry.data[CONF_TOTP_SECRET]
             errors, unique_id, _title, mac = await self._async_try(data)
             if not errors and unique_id is not None:
                 data = _with_mac(data, mac)
@@ -378,7 +427,7 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                _RECONFIGURE_SCHEMA, _without_password(user_input or entry.data)
+                _RECONFIGURE_SCHEMA, _without_secrets(user_input or entry.data)
             ),
             errors=errors,
         )
@@ -398,6 +447,9 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
                 **entry.data,
                 CONF_USERNAME: user_input.get(CONF_USERNAME, ""),
                 CONF_PASSWORD: user_input.get(CONF_PASSWORD, ""),
+                # As typed: blank removes a stored secret, for a unit that
+                # has had two-factor authentication turned off.
+                CONF_TOTP_SECRET: user_input.get(CONF_TOTP_SECRET, ""),
             }
             errors, unique_id, _title, mac = await self._async_try(data)
             if not errors and unique_id is not None:

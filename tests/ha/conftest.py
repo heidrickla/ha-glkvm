@@ -123,6 +123,8 @@ class FakeClient:
     )
     # Every credentialed read attempted, in order, whether or not it failed.
     reads: list[str] = field(default_factory=list)
+    # The keyword arguments of every GlkvmClient construction, in order.
+    constructed: list[dict[str, Any]] = field(default_factory=list)
 
     def _check(self, read: str | None = None) -> None:
         if read is not None:
@@ -260,7 +262,8 @@ def fake_client(monkeypatch) -> FakeClient:
     """Replace the real client wherever it is constructed."""
     fake = FakeClient()
 
-    def client(*_args: Any, cert_sha256: str | None = None, **_kwargs: Any) -> Any:
+    def client(*_args: Any, cert_sha256: str | None = None, **kwargs: Any) -> Any:
+        fake.constructed.append({**kwargs, "cert_sha256": cert_sha256})
         if cert_sha256 is not None and cert_sha256 != fake.cert_sha256:
             return MismatchedCertificateClient()
         return fake

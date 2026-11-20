@@ -22,6 +22,12 @@ DEFAULT_USERNAME = "admin"
 # The setup forms' collapsed section holding what has a working default.
 CONF_ADVANCED = "advanced"
 
+# Entry data, optional: the base32 TOTP secret of a unit with two-factor
+# authentication on, as its 2FA setup screen shows it. The client appends the
+# current code to the password on every request. Never logged; redacted from
+# diagnostics.
+CONF_TOTP_SECRET = "totp_secret"
+
 # Entry data: SHA-256 of the certificate the unit presented at its last setup.
 # A discovered address is trusted with the entry's credentials only over a
 # connection presenting this certificate.

@@ -9,7 +9,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_CERT_SHA256
+from .const import CONF_CERT_SHA256, CONF_TOTP_SECRET
 from .coordinator import GlkvmConfigEntry
 
 # Credentials, plus everything that identifies the household's hardware or
@@ -19,6 +19,7 @@ REDACT = {
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_CERT_SHA256,
+    CONF_TOTP_SECRET,
     "serial",
     "hostname",
     "mac",
