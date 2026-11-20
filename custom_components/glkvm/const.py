@@ -65,8 +65,9 @@ SECTIONS = (
 
 # Zeroconf. The units announce _glinet._tcp.local. with TXT mn=<model>,
 # v=<firmware>, devid and mac=<base64 of the twelve hex digits>. The manifest
-# filters on mn, so only a Comet KVM reaches the flow; the MAC is the only key
-# the announcement shares with the unit's own API.
+# filters on mn (rm10 for the Comet Pro, rm4pe for the Comet X), so only a
+# Comet KVM reaches the flow; the MAC is the only key the announcement shares
+# with the unit's own API.
 ZEROCONF_MAC = "mac"
 
 # Repair issues.

@@ -148,8 +148,9 @@ rules:
     comment: |
       Zeroconf. Measured from a LAN host on 2026-09-04: the units announce
       _glinet._tcp.local. on 443 with TXT mn=rm10, v=<firmware>, devid and
-      mac=<base64 of the twelve hex digits>. The manifest filters on mn, so
-      only a Comet KVM reaches the flow. The serial an entry is keyed on is
+      mac=<base64 of the twelve hex digits>. The manifest filters on mn
+      (rm10 for the Comet Pro, rm4pe for the Comet X), so only a Comet KVM
+      reaches the flow. The serial an entry is keyed on is
       behind authentication and is in neither the TXT records nor
       /api/info's reach, so the confirm step asks for the login, reads the
       serial and creates the entry keyed on it.

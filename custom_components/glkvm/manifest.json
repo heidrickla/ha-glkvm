@@ -17,6 +17,12 @@
       "properties": {
         "mn": "rm10"
       }
+    },
+    {
+      "type": "_glinet._tcp.local.",
+      "properties": {
+        "mn": "rm4pe"
+      }
     }
   ]
 }

@@ -4,6 +4,7 @@ Every step that can show an error is also driven past it: the unit comes
 back, the same flow is resubmitted, and it ends where it should.
 """
 
+import json
 from dataclasses import replace
 from ipaddress import ip_address
 
@@ -33,6 +34,7 @@ from custom_components.glkvm.const import (
     CONF_TOTP_SECRET,
     DOMAIN,
 )
+from tests.pure import COMPONENT
 
 from .conftest import (
     ENTRY_DATA,
@@ -250,6 +252,23 @@ async def _discover(hass, info=None):
     return await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_ZEROCONF}, data=info or _announcement()
     )
+
+
+def test_the_manifest_offers_the_comet_pro_and_the_comet_x():
+    manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
+    matchers = manifest["zeroconf"]
+    assert {m["type"] for m in matchers} == {"_glinet._tcp.local."}
+    assert sorted(m["properties"]["mn"] for m in matchers) == ["rm10", "rm4pe"]
+
+
+async def test_a_discovered_comet_x_is_added_the_same_way(hass, fake_client):
+    result = await _discover(hass, _announcement(mn="rm4pe"))
+    assert result["step_id"] == "zeroconf_confirm"
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], frontend_submission(result, {CONF_PASSWORD: "secret"})
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert done["result"].unique_id == SERIAL
 
 
 def test_the_txt_mac_is_base64_of_the_twelve_hex_digits():
