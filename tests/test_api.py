@@ -475,3 +475,64 @@ def test_no_read_asks_for_the_extras_section():
         fields = (call["params"] or {}).get("fields", "")
         assert fields, f"bare /api/info requested: {call['url']}"
         assert "extras" not in fields.split(",")
+
+
+# ------------------------------------------------------------ two-factor
+
+
+RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # base32 of "12345678901234567890"
+
+
+def test_a_totp_secret_appends_the_current_code_to_the_password():
+    # RFC 6238's SHA-1 vector at T=59 is 94287082; kvmd checks six digits.
+    session = _Session([_json("auth_check.json")])
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: 59.0)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"] == {
+        "X-KVMD-User": "admin",
+        "X-KVMD-Passwd": "secret287082",
+    }
+
+
+def test_the_code_is_computed_afresh_for_every_request():
+    now = [59.0]
+    session = _Session([_json("auth_check.json"), _json("auth_check.json")])
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: now[0])
+    _run(client.check_auth())
+    now[0] = 1111111109.0
+    _run(client.check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret287082"
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret081804"
+
+
+def test_the_secret_is_accepted_as_an_authenticator_app_shows_it():
+    session = _Session([_json("auth_check.json")])
+    written = "gezd gnbv gy3t qojq gezd gnbv gy3t qojq"
+    client = _client(session, totp_secret=written, clock=lambda: 59.0)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret287082"
+
+
+def test_an_empty_password_with_a_secret_sends_only_the_code():
+    session = _Session([_json("auth_check.json")])
+    client = _client(session, password=None, totp_secret=RFC_SECRET, clock=lambda: 59)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "287082"
+
+
+def test_a_blank_secret_means_no_second_factor():
+    session = _Session([_json("auth_check.json")])
+    _run(_client(session, totp_secret="").check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret"
+
+
+def test_a_malformed_secret_is_refused_at_construction():
+    with pytest.raises(ValueError):
+        _client(_Session([]), totp_secret="not base32!")
+
+
+def test_without_a_username_no_code_is_sent_either():
+    session = _Session([_json("auth_check.json")])
+    client = _client(session, username=None, totp_secret=RFC_SECRET)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"] == {}

@@ -17,6 +17,11 @@ every request, so there is no session to expire and nothing to store. A unit
 with authentication disabled ignores the headers. GL.iNet added a lockout
 after repeated failed logins, which is one more reason a caller must stop
 polling on the first 401 rather than retrying with the same credentials.
+
+Two-factor authentication: when the unit has a TOTP secret set, kvmd reads
+the last six characters of the password as the current code. Given the
+secret, the client appends a fresh code to `X-KVMD-Passwd` on every request
+(see totp.py), so header authentication stays stateless.
 """
 
 from __future__ import annotations
@@ -26,7 +31,8 @@ import contextlib
 import hashlib
 import json
 import ssl
-from collections.abc import Iterable, Mapping
+import time
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import aiohttp
@@ -43,6 +49,7 @@ from .models import (
     SystemInfo,
     WolTarget,
 )
+from .totp import normalise_secret, totp
 
 # Reads are small JSON documents; commands may hold a button for seconds
 # (`power_long` holds the ATX power line for about five) when asked to wait.
@@ -107,14 +114,18 @@ class GlkvmClient:
         password: str | None = None,
         verify_ssl: bool = False,
         cert_sha256: str | None = None,
+        totp_secret: str | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self._session = session
         self._host = host
         self._port = port
-        self._headers: dict[str, str] = {}
-        if username:
-            self._headers["X-KVMD-User"] = username
-            self._headers["X-KVMD-Passwd"] = password or ""
+        self._username = username or None
+        self._password = password or ""
+        # Checked here so a malformed secret fails at construction, not as
+        # an opaque error on the first request. Raises ValueError.
+        self._totp_secret = normalise_secret(totp_secret) if totp_secret else None
+        self._clock = clock
         # aiohttp takes ssl=False to skip verification; True means the default
         # context. The unit's certificate is self-signed for "localhost", so
         # the default is off (see const.DEFAULT_VERIFY_SSL).
@@ -137,6 +148,19 @@ class GlkvmClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path if path.startswith('/') else '/' + path}"
 
+    def _auth_headers(self) -> dict[str, str]:
+        """The credential headers for one request, built when it is sent.
+
+        With a TOTP secret the password carries the code valid now, so the
+        headers cannot be computed once and kept.
+        """
+        if not self._username:
+            return {}
+        password = self._password
+        if self._totp_secret is not None:
+            password += totp(self._totp_secret, self._clock())
+        return {"X-KVMD-User": self._username, "X-KVMD-Passwd": password}
+
     # ------------------------------------------------------------ transport
 
     async def _call(
@@ -155,7 +179,7 @@ class GlkvmClient:
                 self._url(path),
                 params=dict(params) if params else None,
                 data=data,
-                headers=self._headers,
+                headers=self._auth_headers(),
                 ssl=self._ssl,
                 timeout=timeout,
             ) as resp:
