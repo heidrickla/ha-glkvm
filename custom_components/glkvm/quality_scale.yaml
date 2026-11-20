@@ -3,7 +3,7 @@ rules:
   action-setup:
     status: done
     comment: |
-      The four actions are registered in async_setup, not per entry, so a call
+      The five actions are registered in async_setup, not per entry, so a call
       while the entry is unloaded gets a translated refusal.
   appropriate-polling:
     status: done
@@ -107,12 +107,13 @@ rules:
       Coordinator failure marks everything unavailable, and a partial poll
       marks the sections that failed: every entity carries the section it
       reads and is unavailable while that section is in KvmData.failed, so a
-      timeout or a 500 on one of the seven endpoints shows as unavailable
+      timeout or a 500 on one of the eight endpoints shows as unavailable
       rather than as the last value the unit confirmed. ATX, media and
       capture entities are unavailable in the states the unit reports as
       well. tests/ha/test_partial_polls.py drives each of the seven sections
-      through both failures and checks that its entities, and only its
-      entities, go unavailable and then return with a real value.
+      every unit has through both failures and checks that its entities, and
+      only its entities, go unavailable and then return with a real value;
+      tests/ha/test_switch.py does the same for the Comet X's port switch.
   integration-owner: done
   log-when-unavailable:
     status: done
