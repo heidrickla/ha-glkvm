@@ -300,10 +300,12 @@ URL_RE = re.compile(
     r"(?:\[[0-9A-Fa-f:.]+\][^\s\"'`<>)\]},]*|[^\s\"'`<>)\]},]+)"
 )
 # A host written in prose with no scheme. The suffix must end the name:
-# \b would match the "home" of home-assistant.io.
+# \b would match the "home" of home-assistant.io. A file extension after the
+# suffix makes a file name (settings.local.json, CLAUDE.local.md) and no host.
 BARE_HOST_RE = re.compile(
     r"(?<![\w.-])(?:[a-z0-9][a-z0-9-]*\.)+"
-    r"(?:corp|home|home\.arpa|intranet|internal|lan|local|localdomain)(?![\w-])",
+    r"(?:corp|home|home\.arpa|intranet|internal|lan|local|localdomain)"
+    r"(?![\w-]|\.[a-z])",
     re.IGNORECASE,
 )
 # A host made of anything else is a template - f"http://{host}/" - not a host.
