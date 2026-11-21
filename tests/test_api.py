@@ -475,3 +475,140 @@ def test_no_read_asks_for_the_extras_section():
         fields = (call["params"] or {}).get("fields", "")
         assert fields, f"bare /api/info requested: {call['url']}"
         assert "extras" not in fields.split(",")
+
+
+# ------------------------------------------------------------ two-factor
+
+
+RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # base32 of "12345678901234567890"
+
+
+def test_a_totp_secret_appends_the_current_code_to_the_password():
+    # RFC 6238's SHA-1 vector at T=59 is 94287082; kvmd checks six digits.
+    session = _Session([_json("auth_check.json")])
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: 59.0)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"] == {
+        "X-KVMD-User": "admin",
+        "X-KVMD-Passwd": "secret287082",
+    }
+
+
+def test_the_code_is_computed_afresh_for_every_request():
+    now = [59.0]
+    session = _Session([_json("auth_check.json"), _json("auth_check.json")])
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: now[0])
+    _run(client.check_auth())
+    now[0] = 1111111109.0
+    _run(client.check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret287082"
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret081804"
+
+
+def test_the_secret_is_accepted_as_an_authenticator_app_shows_it():
+    session = _Session([_json("auth_check.json")])
+    written = "gezd gnbv gy3t qojq gezd gnbv gy3t qojq"
+    client = _client(session, totp_secret=written, clock=lambda: 59.0)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret287082"
+
+
+def test_an_empty_password_with_a_secret_sends_only_the_code():
+    session = _Session([_json("auth_check.json")])
+    client = _client(session, password=None, totp_secret=RFC_SECRET, clock=lambda: 59)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "287082"
+
+
+def test_a_blank_secret_means_no_second_factor():
+    session = _Session([_json("auth_check.json")])
+    _run(_client(session, totp_secret="").check_auth())
+    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret"
+
+
+def test_a_malformed_secret_is_refused_at_construction():
+    with pytest.raises(ValueError):
+        _client(_Session([]), totp_secret="not base32!")
+
+
+def test_without_a_username_no_code_is_sent_either():
+    session = _Session([_json("auth_check.json")])
+    client = _client(session, username=None, totp_secret=RFC_SECRET)
+    _run(client.check_auth())
+    assert session.calls[0]["headers"] == {}
+
+
+# ---------------------------------------------------------------- switch
+
+
+def test_the_switch_is_read_from_api_switch():
+    session = _Session([_json("switch_rm4pe.json")])
+    state = _run(_client(session).get_switch())
+    assert session.calls[0]["method"] == "GET"
+    assert session.calls[0]["url"] == "https://192.0.2.15/api/switch"
+    assert state is not None
+    assert state.active_port == 0
+    assert state.port_count == 4
+    assert state.video_links == (True, False, True, True)
+
+
+def test_a_unit_without_the_switch_answers_404_and_has_none():
+    # Every Comet but the GL-RM4PE: kvmd does not register the route.
+    session = _Session([_Resp(404, b"404: Not Found", "text/plain")])
+    assert _run(_client(session).get_switch()) is None
+
+
+def test_any_other_switch_error_reaches_the_caller():
+    error = {"ok": False, "result": {"error": "Error", "error_msg": "boom"}}
+    session = _Session([_json(error, status=500), _json("unauthorized.json", 401)])
+    client = _client(session)
+    with pytest.raises(api.GlkvmResponseError):
+        _run(client.get_switch())
+    with pytest.raises(api.GlkvmAuthError):
+        _run(client.get_switch())
+
+
+def test_set_active_sends_the_zero_based_port():
+    session = _Session([_json({"ok": True, "result": {}})])
+    _run(_client(session).switch_set_active(2))
+    call = session.calls[0]
+    assert call["method"] == "POST"
+    assert call["url"] == "https://192.0.2.15/api/switch/set_active"
+    assert call["params"] == {"port": "2"}
+    assert call["data"] is None
+    # Switching waits for the hardware; it gets the command timeout.
+    assert call["timeout"] is api._TIMEOUT_COMMAND
+
+
+@pytest.mark.parametrize("port", [-1, True, 1.5, "2"])
+def test_set_active_refuses_a_bad_port_before_any_request(port):
+    session = _Session([])
+    with pytest.raises(ValueError):
+        _run(_client(session).switch_set_active(port))
+    assert session.calls == []
+
+
+def test_port_names_come_from_gl_user_config():
+    session = _Session([_json("system_get_config.json")])
+    names = _run(_client(session).get_port_names())
+    assert session.calls[0]["url"].endswith("/api/system/get_config")
+    assert names == ("Workstation", None, "Build box", "Media player")
+
+
+def test_port_names_absent_endpoint_or_key_is_none():
+    session = _Session(
+        [
+            _Resp(404, b"404: Not Found", "text/plain"),
+            _json({"ok": True, "result": {"success": True, "config": {}}}),
+        ]
+    )
+    client = _client(session)
+    assert _run(client.get_port_names()) is None
+    assert _run(client.get_port_names()) is None
+
+
+def test_port_names_other_errors_reach_the_caller():
+    error = {"ok": False, "result": {"error": "BadRequestError", "error_msg": "x"}}
+    session = _Session([_json(error, status=502)])
+    with pytest.raises(api.GlkvmResponseError):
+        _run(_client(session).get_port_names())

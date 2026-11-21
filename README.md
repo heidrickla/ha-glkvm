@@ -31,6 +31,9 @@ The device page, captured against the test suite's recorded kvmd answers.
 | Wake *name* | button | One per Wake-on-LAN target stored on the unit. |
 | CPU temperature, CPU usage, Memory usage | sensor | The KVM's own health (firmware 1.10.0 and later). |
 | *channel* | switch, button or binary sensor | One per user-GPIO channel configured on the unit: relays, smart plugs, KVM switch ports. |
+| Active port | select | Comet X only. Which of the four ports the KVM shows and types into; picking one switches. See [Port switch](#port-switch-comet-x). |
+| Active port | sensor | Comet X only. The active port as the number printed on the unit, 1 to 4. |
+| Port 1 video ... Port 4 video | binary sensor | Comet X only. Whether a source is plugged in and putting out video on that port's HDMI input. |
 
 Memory available, both network rates, the H.264 bitrate and the stream client count are there too, disabled by default.
 
@@ -40,9 +43,9 @@ The switches, buttons and selects operate the host or change the unit's settings
 
 Every action takes the KVM to talk to as `config_entry_id`, because you may have more than one. In the UI it is a picker; in YAML it is the entry id, which the picker fills in for you when you switch the editor to YAML mode. An action called while that KVM is unloaded is refused in words rather than failing silently.
 
-The four actions are administrator actions. A call from a non-administrator is refused; a call from an automation or script runs.
+The five actions are administrator actions. A call from a non-administrator is refused; a call from an automation or script runs.
 
-`glkvm.type_text` types text into the host over the USB keyboard.
+`glkvm.type_text` types text into the host over the USB keyboard. On a Comet X that is the host on the active port: the keyboard and mouse follow the switch, so switch first (select or `set_active_port`) and then type.
 
 | Field | Required | Meaning |
 |---|---|---|
@@ -50,7 +53,7 @@ The four actions are administrator actions. A call from a non-administrator is r
 | `text` | yes | What to type. Newlines are sent as Enter. |
 | `slow` | no, default `false` | Add a delay between keys, for hosts that drop fast input. |
 
-`glkvm.send_keys` presses a combination together on the host, then releases it.
+`glkvm.send_keys` presses a combination together on the host, then releases it. On a Comet X, the host on the active port.
 
 | Field | Required | Meaning |
 |---|---|---|
@@ -64,13 +67,64 @@ The four actions are administrator actions. A call from a non-administrator is r
 | `config_entry_id` | yes | The KVM to send the packet from. |
 | `mac` | yes | The target's MAC address, `aa:bb:cc:dd:ee:ff` or `aa-bb-cc-dd-ee-ff`. Anything else is refused before the unit is asked. |
 
-`glkvm.power` is the full set of ATX power actions. It refuses when the unit has no ATX board.
+`glkvm.power` is the full set of ATX power actions. It refuses when the unit has no ATX board. On a Comet X it can target any port's host: see [Per-port power](#per-port-power-comet-x).
 
 | Field | Required | Meaning |
 |---|---|---|
 | `config_entry_id` | yes | The KVM whose host to control. |
 | `action` | yes | `on`, `off` (asks the OS to shut down), `off_hard` (cuts power), `reset_hard`. |
 | `wait` | no, default `true` | Wait for the KVM to finish the action before returning. |
+| `port` | no | Comet X only. The port whose host to control, `1` to `4` as printed on the unit. Without it, the host on the active port. |
+
+`glkvm.set_active_port` switches a Comet X to one of its ports. It refuses on a unit without the port switch, and refuses a port number the unit does not have.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `config_entry_id` | yes | The KVM to switch. |
+| `port` | yes | The port, numbered as printed on the unit: `1` to `4`. Sent to kvmd as 0 to 3. |
+
+```yaml
+action: glkvm.set_active_port
+data:
+  config_entry_id: 0123456789abcdef0123456789abcdef
+  port: 3
+```
+
+### Port switch (Comet X)
+
+The GL-RM4PE has a four-port KVM switch built in. The integration reads it from `/api/switch` on every poll; every other Comet answers that endpoint with 404, which reads as "no switch" and creates none of these entities.
+
+| Entity id (device named "KVM") | Unique id | What it is |
+|---|---|---|
+| `select.kvm_active_port` | `<serial>_active_port` | Options are the port names, current option is the active port. Selecting one sends `POST /api/switch/set_active?port=<0-3>`; the unit answers once it has switched, about 2.5 s later, and the integration re-reads its state. |
+| `sensor.kvm_active_port` | `<serial>_active_port` | The active port as a number, 1 to 4, matching the labels on the unit. Unknown while kvmd reports no active port. |
+| `binary_sensor.kvm_port_1_video` ... `_port_4_video` | `<serial>_port_1_video` ... `<serial>_port_4_video` | On while that port's HDMI input has a source (kvmd's `video.links`). Device class plug. |
+
+The select and the sensor share a unique id; Home Assistant keys entities by platform as well, so they do not collide. The binary sensors are named and keyed by the printed port number, never by the port's name, so renaming a port changes neither.
+
+Port names come from GL.iNet's web UI, which stores them in its own user config (`/api/system/get_config`, `port_names`). Where a port has no name there, kvmd's own port name is used, and failing that "Port 1" to "Port 4". Two ports with the same name get their port number appended, `Laptop (1)` and `Laptop (2)`, because a select's options must differ. Names changed in the web UI show at the next poll. The integration never writes names: GL's config endpoint replaces the whole document, and kvmd's `/api/switch/set_port_params` names do not survive a kvmd restart on this unit.
+
+### Per-port power (Comet X)
+
+A Comet X takes one GL.iNet ATX board per port. Each board plugs into the USB-A socket on the back that belongs to its port, and the unit powers only the active port's socket. So only the active port's host can be powered at a time, which is also what GL.iNet's own console says. The Host power switch and the Power button, Hold power button and Reset buttons act on the host on the active port, and follow the switch.
+
+`glkvm.power` with a `port` powers a host on any port:
+
+1. The KVM switches to that port, unless it is already active.
+2. The action waits, for up to 15 seconds, for kvmd to report that port's board present. The board needs to enumerate once its socket is powered.
+3. It checks the KVM is still on that port. Then it runs the action.
+
+The KVM stays on that port afterwards. Switching back straight away would cut the board's USB power, possibly in the middle of a press. If no board answers on that port, or the port was switched away during the wait, nothing is pressed and the action fails with a message saying which. Port switches made through the select or `set_active_port` wait for a per-port power action in progress to finish.
+
+```yaml
+action: glkvm.power
+data:
+  config_entry_id: 0123456789abcdef0123456789abcdef
+  port: 3
+  action: "on"
+```
+
+kvmd also has its own per-port endpoints, `/api/switch/atx/power` and `/api/switch/atx/click`. On GL.iNet's firmware they answer `ok` but do nothing: the RM4PE's switch backend implements them as empty stubs, and the ATX lists in `/api/switch` are always empty. The integration does not use them.
 
 ## Supported devices
 
@@ -79,6 +133,7 @@ The four actions are administrator actions. A call from a non-administrator is r
 | GL-RM10 Comet Pro | 1.10.0 | Every entity and action is built against recorded answers from this unit. |
 | GL-RM10 Comet Pro | 1.8.1 | No health sensors: that firmware has no `health` section, and a test covers an answer shaped that way. |
 | GL-RM1 Comet | any | Same kvmd fork and API. |
+| GL-RM4PE Comet X | 1.10.1 | Everything above, plus the port switch and per-port power. The switch and the two-factor login were checked against a live unit with 2FA on; the tests use fixtures in the shape it answers with, not a verbatim recording. Per-port power is built from the unit's firmware (the USB-A sockets' power following the active port was checked live) and GL.iNet's documentation, and has not been run against an ATX board on this model. |
 
 The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the ATX board's power reading, the firmware version and hostname endpoints, the Wake-on-LAN list), and degrades where they are absent rather than guessing.
 
@@ -124,14 +179,17 @@ If your network does not carry mDNS between Home Assistant and the unit, add it 
 | Port | Advanced (by hand only) | 443 unless you have moved the web interface. |
 | Username | Advanced | `admin`, the one login stock firmware has. |
 | Verify the KVM's certificate | Advanced | Off by default. The unit ships a self-signed certificate for `localhost`; turn this on only if you have installed your own. |
+| Two-factor secret | Advanced | Only when two-factor authentication is on: the base32 secret the unit showed when 2FA was set up (the text under the QR code, also what kvmd keeps in its `totp.secret`). Spaces, dashes, lower case and missing `=` padding are accepted; it is stored normalised. Leave it empty otherwise. |
+
+With a secret set, every request sends the password followed by the current six-digit code (RFC 6238: HMAC-SHA1, 30-second step), computed fresh for that request. That is what kvmd's own check expects: it takes the last six characters of the password as the code and accepts the current step or one either side. Home Assistant's clock has to be right to within about 30 seconds of the unit's. The secret is never logged and is redacted from diagnostics, and it never goes back to the browser, including after a form error.
 
 Setup checks the credentials against the unit and reads its serial number before the entry is created, so a wrong password or a wrong address is caught on the form. The serial is the entry's unique id: adding a unit that is already configured updates its existing entry with the address, port and credentials you just entered instead of creating a second one. When the form comes back with an error, everything you typed is kept except the password.
 
 ### Reconfiguring
 
-Settings -> Devices & Services -> GL.iNet KVM -> Reconfigure changes the address, port, credentials or certificate check. The address must still answer as the same unit, and a blank password keeps the current one. Reconfigure and reauthentication fill an empty username with `admin`. There are no options beyond these.
+Settings -> Devices & Services -> GL.iNet KVM -> Reconfigure changes the address, port, credentials, two-factor secret or certificate check. The address must still answer as the same unit, and a blank password or a blank two-factor secret keeps the current one. Reconfigure and reauthentication fill an empty username with `admin`. There are no options beyond these.
 
-When the unit starts refusing the credentials, Home Assistant stops polling and asks for them again. It stops rather than retrying because GL.iNet's firmware locks the account after repeated failed logins. Each poll checks the credentials once before its concurrent reads, so a changed password costs one failed login. The new credentials are checked against the serial the entry was set up for: if a different KVM has been put at that address, the form says so rather than quietly handing this entry's device, entities and history to another unit.
+When the unit starts refusing the credentials, Home Assistant stops polling and asks for them again. It stops rather than retrying because GL.iNet's firmware locks the account after repeated failed logins. Each poll checks the credentials once before its concurrent reads, so a changed password costs one failed login. Reauthentication takes the two-factor secret as typed, so leaving it blank there removes a stored one; that is how to clear it after turning 2FA off on the unit, which makes the stored secret fail every login and starts reauthentication by itself. The new credentials are checked against the serial the entry was set up for: if a different KVM has been put at that address, the form says so rather than quietly handing this entry's device, entities and history to another unit.
 
 ### Removing it
 
@@ -139,9 +197,9 @@ Settings -> Devices & Services -> GL.iNet KVM -> Delete. That removes the entry,
 
 ## How it updates
 
-Every 30 seconds the integration reads the unit's ATX, virtual media, streamer, HID, GPIO, health and Wake-on-LAN state, each from its own endpoint. A single endpoint failing leaves the rest live and makes only the entities that read it unavailable, so a section the unit has stopped answering for shows as unavailable rather than as the value it last confirmed. Only the unit being unreachable for all seven marks everything unavailable. The camera fetches a frame when something asks for one.
+Every 30 seconds the integration reads the unit's ATX, virtual media, streamer, HID, GPIO, health, Wake-on-LAN and port switch state, each from its own endpoint. A single endpoint failing leaves the rest live and makes only the entities that read it unavailable, so a section the unit has stopped answering for shows as unavailable rather than as the value it last confirmed. Only the unit being unreachable for all eight marks everything unavailable. A unit without the port switch answers that endpoint with 404, which is absence, not a failure. On a Comet X the port names are read alongside the switch; a failed names read keeps the names from the last one and is never counted as a failure. The camera fetches a frame when something asks for one.
 
-Two sets of entities follow the unit between polls. Wake buttons are created for targets added on the unit and removed from the entity registry for targets deleted there, including deletions made while Home Assistant was not running. The health sensors are created the first time the unit's health section answers, so a read that failed at startup does not hide them until the next reload.
+Three sets of entities follow the unit between polls. Wake buttons are created for targets added on the unit and removed from the entity registry for targets deleted there, including deletions made while Home Assistant was not running. The health sensors are created the first time the unit's health section answers, so a read that failed at startup does not hide them until the next reload. The port switch entities are created the same way, the first time the switch answers.
 
 The interval is thirty seconds because host power, video signal and attached media change at human speed, and the unit's CPU belongs to its video encoder. The unit also carries the same state as a push stream over `/api/ws`.
 
@@ -237,6 +295,8 @@ sequence:
 - Virtual media is offline on a stock 1.10.0 unit. That firmware ships the mass-storage functions unlinked from the USB gadget. Enabling USB functions in GL.iNet's own web UI fixes it without a shell (it writes the same keys to the unit's `boot.yaml`); so does setting `otg: {devices: {msd: {start_cdrom: true, start_flash: true}}}` in `override.yaml` and rebooting. A repair issue says so. Images smaller than 614,400 bytes are rejected by the unit's kernel.
 - Power control needs GL.iNet's ATX board. Without it the power switch and the three buttons are unavailable, and the `power` action refuses.
 - Keyboard connected and Mouse connected are lazy. kvmd updates them on the next successful write, so a host that has stopped polling the gadget still reads connected until something is typed.
+- Port names are read-only here. Set them in GL.iNet's web UI; the integration picks them up at the next poll.
+- On a Comet X, the camera, the capture sensors, Video signal, the keyboard and mouse, and the power entities all follow the active port. There is one capture pipeline, not four, and one ATX board answers at a time.
 - Discovery needs mDNS to reach Home Assistant. The announcement is filtered on the model, so only Comet KVMs are offered; a unit on a segment that does not forward mDNS has to be added by address. A unit whose entry has no stored MAC yet is offered as a new device until its serial is read, at which point it is recognised and its address updated rather than duplicated.
 
 ## Troubleshooting
@@ -244,7 +304,10 @@ sequence:
 | Symptom | Cause |
 |---|---|
 | Setup says "Could not reach a KVM at that address" | Home Assistant cannot route to the unit, or the port is wrong. Try the unit's web UI from the Home Assistant host's network. |
-| Setup says the credentials were rejected, and they are right | The unit has locked the account after failed logins. Wait it out, or log in through the unit's web UI. |
+| Setup says the credentials were rejected, and they are right | The unit has locked the account after failed logins. Wait it out, or log in through the unit's web UI. If the unit has two-factor authentication on, the two-factor secret under Advanced is missing or wrong, or Home Assistant's clock is more than about 30 seconds off. |
+| Setup says the two-factor secret is not base32 | Copy the text under the QR code the unit showed at 2FA setup, not a six-digit code. |
+| Everything stopped after 2FA was turned off on the unit | The stored secret now makes every login fail. Reauthenticate with the two-factor secret left blank. |
+| No Active port or Port video entities | The unit has no port switch (only the GL-RM4PE has one), or its switch has not answered a read yet. |
 | Everything is unavailable | The unit is unreachable. The log has one line saying so and one when it recovers. |
 | One group of entities is unavailable while the rest are fine | The endpoint behind that group failed on the last poll. Turn on debug logging: the coordinator names each failed section. |
 | The KVM is not discovered | Home Assistant sees mDNS only on networks it is attached to, and the announcement is filtered on the model. Add the unit by address. |
@@ -252,7 +315,8 @@ sequence:
 | A discovered KVM you already have is offered as a new device | Its entry has no stored MAC yet. Adding it anyway is safe: it is recognised by its serial and updates the entry you have. |
 | Camera and capture sensors unavailable, the rest fine | The streamer is not running on the unit. See known limitations. |
 | Virtual media entities unavailable, the rest fine | The mass-storage gadget is offline. See known limitations. |
-| Power entities unavailable, the rest fine | No ATX board is attached to the unit. |
+| Power entities unavailable, the rest fine | No ATX board is attached to the unit. On a Comet X, none on the active port's USB-A socket. |
+| `power` with a `port` says no ATX board answered | That port has no board in its own USB-A socket on the back, or the board took longer than 15 seconds to appear. |
 | No CPU temperature, CPU usage or Memory usage sensors | The firmware has no health section (1.8.1), or the unit has not answered a health read yet. They appear on the first poll that has one. |
 | A Wake button vanished | The target was removed from the unit's Wake-on-LAN list. |
 | An action fails with "is not loaded" | The KVM's entry is unloaded or still retrying setup. Check its card under Devices & Services. |
@@ -264,11 +328,11 @@ logger:
     custom_components.glkvm: debug
 ```
 
-Download diagnostics from the device page for a report with the host, serial, credentials, every MAC and IP address, every Wake-on-LAN target name and every user-GPIO channel name redacted. Stored image filenames are left in clear.
+Download diagnostics from the device page for a report with the host, serial, credentials (the two-factor secret included), every MAC and IP address, every Wake-on-LAN target name, every user-GPIO channel name and every switch port name redacted. Stored image filenames are left in clear.
 
 ## Development
 
-- `custom_components/glkvm/api.py` and `models.py` import nothing from Home Assistant. `tests/test_api.py` and `tests/test_models.py` load them by path and run on a bare interpreter against `tests/fixtures/`, which are the bodies a real GL-RM10 sent, with its serial, hostname and the household's MAC and IP addresses replaced.
+- `custom_components/glkvm/api.py`, `models.py` and `totp.py` import nothing from Home Assistant. `tests/test_api.py`, `tests/test_models.py` and `tests/test_totp.py` load them by path and run on a bare interpreter against `tests/fixtures/`, which are the bodies a real GL-RM10 sent, with its serial, hostname and the household's MAC and IP addresses replaced. `switch_rm4pe.json` and `system_get_config.json` are written in the shape a GL-RM4PE answers with, with invented port names; `test_totp.py` checks the code generator against the RFC 6238 test vectors.
 - `tests/ha/` covers the Home Assistant layer with the client replaced by a fake that answers from the same fixtures. The GitHub `Tests` workflow runs it on every push against Home Assistant 2026.8.3 (pytest-homeassistant-custom-component 0.13.357) on Python 3.14, with mypy in strict mode and both suites measured into one coverage figure that fails the job under 95%. The suite skips where the Home Assistant test harness is absent. On Windows `tests/winposix.py`, loaded by `-p tests.winposix` from `pyproject.toml`, supplies the POSIX modules Home Assistant imports and the two shims its event loop needs, so both suites run there too.
 - `python tools/validate_local.py` is the offline half of the hassfest and HACS checks plus every cross-file consistency check, including a scan for user-facing exceptions raised without a translation key. Its published-tree scan reads every file git lists except the binary suffixes, and refuses private IPv4 and IPv6 address literals, private-suffix and dotless URL hosts, and any host name listed in `HA_DEV_HOST_NAMES`, comma separated. The forge job supplies that list from a secret. The GitHub job does not, because the failure line prints the name it matched.
 - `python tools/make_brand.py` regenerates the brand images and checks their sizes, transparency and fill.

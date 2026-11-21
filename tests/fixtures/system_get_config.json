@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "result": {
+    "success": true,
+    "config": {
+      "language": "en",
+      "port_names": ["Workstation", null, "Build box", "Media player"]
+    }
+  }
+}

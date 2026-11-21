@@ -21,6 +21,12 @@
       },
       "gpio_input": {
         "default": "mdi:electric-switch"
+      },
+      "port_video": {
+        "default": "mdi:video-input-hdmi",
+        "state": {
+          "off": "mdi:video-off"
+        }
       }
     },
     "sensor": {
@@ -56,6 +62,9 @@
       },
       "network_tx_rate": {
         "default": "mdi:upload-network"
+      },
+      "active_port": {
+        "default": "mdi:video-switch"
       }
     },
     "switch": {
@@ -101,6 +110,9 @@
       },
       "mouse_output": {
         "default": "mdi:mouse-variant"
+      },
+      "active_port": {
+        "default": "mdi:video-switch"
       }
     },
     "camera": {
@@ -113,6 +125,7 @@
     "type_text": "mdi:keyboard-variant",
     "send_keys": "mdi:keyboard-outline",
     "wake": "mdi:power-sleep",
-    "power": "mdi:power"
+    "power": "mdi:power",
+    "set_active_port": "mdi:video-switch"
   }
 }

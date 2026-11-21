@@ -9,7 +9,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_CERT_SHA256
+from .const import CONF_CERT_SHA256, CONF_TOTP_SECRET
 from .coordinator import GlkvmConfigEntry
 
 # Credentials, plus everything that identifies the household's hardware or
@@ -19,6 +19,7 @@ REDACT = {
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_CERT_SHA256,
+    CONF_TOTP_SECRET,
     "serial",
     "hostname",
     "mac",
@@ -30,6 +31,10 @@ REDACT = {
 # MsdState.image are ISO filenames under the same key, and redacting those
 # hides what the drive is presenting, so the addition cannot be global.
 WOL_REDACT = REDACT | {"name"}
+
+# The port switch only. SwitchPort.name and ui_names are the labels the user
+# gave the ports, in practice the names of the machines behind them.
+SWITCH_REDACT = REDACT | {"name", "ui_names"}
 
 # The user-GPIO sections only. GpioChannel.channel is the name the user gave
 # the channel in kvmd's scheme, so it names household hardware. Direction,
@@ -60,6 +65,8 @@ async def async_get_config_entry_diagnostics(
         data["wol"] = async_redact_data(data["wol"], WOL_REDACT)
     if data.get("gpio"):
         data["gpio"] = async_redact_data(data["gpio"], GPIO_REDACT)
+    if data.get("switch"):
+        data["switch"] = async_redact_data(data["switch"], SWITCH_REDACT)
     return {
         "config": async_redact_data(dict(entry.data), REDACT),
         "system": async_redact_data(

@@ -1,6 +1,7 @@
 """A poll where some endpoints answer and some do not.
 
-The unit reads its seven sections from seven endpoints, and GL.iNet's kvmd
+The unit reads each section from its own endpoint (seven on every unit, an
+eighth for the Comet X's port switch, see test_switch.py), and GL.iNet's kvmd
 fails them one at a time: a 500 from /api/msd while /api/atx is fine, a
 socket timeout on one read. What must not happen is an entity going on
 showing the value from the last good poll as though the unit had confirmed
@@ -50,7 +51,7 @@ async def test_one_failed_section_only_takes_its_own_entities(
 
     fake_client.read_fail[section] = failure
     await _poll(hass, config_entry)
-    # The poll succeeded - six sections answered - so the coordinator is not
+    # The poll succeeded - the other sections answered - so the coordinator is not
     # in failure and the other entities are untouched.
     assert config_entry.runtime_data.last_update_success is True
     assert hass.states.get(BY_SECTION[section]).state == "unavailable"
@@ -98,7 +99,7 @@ async def test_every_entity_survives_a_poll_that_carried_nothing(
 
     Every read raised something that is not a connection error, so the poll
     itself succeeded with an empty result. Each entity is asked for its state
-    with all seven sections missing; none may raise, and all must be
+    with every section missing; none may raise, and all must be
     unavailable.
     """
     await setup_entry(hass, config_entry)

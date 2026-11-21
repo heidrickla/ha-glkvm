@@ -16,7 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api import GlkvmClient
-from .const import DEFAULT_PORT, DEFAULT_VERIFY_SSL, DOMAIN
+from .const import CONF_TOTP_SECRET, DEFAULT_PORT, DEFAULT_VERIFY_SSL, DOMAIN
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .services import async_setup_services
 
@@ -58,6 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GlkvmConfigEntry) -> boo
         username=entry.data.get(CONF_USERNAME) or None,
         password=entry.data.get(CONF_PASSWORD) or None,
         verify_ssl=verify_ssl,
+        totp_secret=entry.data.get(CONF_TOTP_SECRET) or None,
     )
     coordinator = GlkvmCoordinator(hass, entry, client)
     # Raises ConfigEntryNotReady while the unit is unreachable and

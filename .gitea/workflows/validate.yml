@@ -135,7 +135,7 @@ jobs:
       # import creeping into api.py or models.py fails this step by itself.
       - name: Pure tests (client + models, no Home Assistant)
         timeout-minutes: 15
-        run: .venv-pure/bin/python -m pytest --durations=15 --junitxml=reports/junit-1.xml tests/test_models.py tests/test_api.py
+        run: .venv-pure/bin/python -m pytest --durations=15 --junitxml=reports/junit-1.xml tests/test_models.py tests/test_api.py tests/test_totp.py
 
       # The gate is on both suites together; see .github/workflows/tests.yml.
       # The pure run here is in the other virtual environment, which has no
@@ -143,7 +143,7 @@ jobs:
       - name: Home Assistant layer tests
         timeout-minutes: 15
         run: |
-          .venv/bin/python -m pytest --durations=15 --junitxml=reports/junit-2.xml tests/test_models.py tests/test_api.py \
+          .venv/bin/python -m pytest --durations=15 --junitxml=reports/junit-2.xml tests/test_models.py tests/test_api.py tests/test_totp.py \
             -p no:homeassistant --cov=custom_components/glkvm --cov-report=
           .venv/bin/python -m pytest --durations=15 --junitxml=reports/junit-3.xml tests/ha --cov=custom_components/glkvm \
             --cov-append --cov-report=term-missing --cov-fail-under=95

@@ -1,4 +1,4 @@
-"""Sensors: the capture pipeline, the media store, and the KVM's own health."""
+"""Sensors: capture, the media store, the KVM's own health, and the active port."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
-from .const import SECTION_HEALTH, SECTION_MSD, SECTION_STREAMER
+from .const import SECTION_HEALTH, SECTION_MSD, SECTION_STREAMER, SECTION_SWITCH
 from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
 from .entity import GlkvmEntity
 from .models import Health, KvmData
@@ -62,6 +62,17 @@ def _has_health(data: KvmData) -> bool:
 
 def _streamer_running(data: KvmData) -> bool:
     return data.streamer is not None and data.streamer.running
+
+
+def _has_switch(data: KvmData) -> bool:
+    return data.switch is not None
+
+
+def _active_port_number(data: KvmData) -> StateType:
+    """The active port as printed on the unit, 1 to 4; kvmd counts from 0."""
+    if data.switch is None or data.switch.active_port is None:
+        return None
+    return data.switch.active_port + 1
 
 
 SENSORS: tuple[GlkvmSensorDescription, ...] = (
@@ -200,6 +211,16 @@ SENSORS: tuple[GlkvmSensorDescription, ...] = (
         suggested_display_precision=1,
         value_fn=_health(lambda h: h.tx_rate),
         exists_fn=_has_health,
+    ),
+    # --- the GL-RM4PE's port switch. The number, not the name: names can be
+    # changed on the unit at any time, and the Active port select shows them.
+    GlkvmSensorDescription(
+        key="active_port",
+        translation_key="active_port",
+        section=SECTION_SWITCH,
+        value_fn=_active_port_number,
+        available_fn=_has_switch,
+        exists_fn=_has_switch,
     ),
 )
 

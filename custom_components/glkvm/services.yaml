@@ -69,3 +69,29 @@ power:
       default: true
       selector:
         boolean:
+    port:
+      required: false
+      example: 2
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+
+set_active_port:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: glkvm
+    port:
+      required: true
+      example: 2
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box

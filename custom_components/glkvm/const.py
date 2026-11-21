@@ -22,6 +22,12 @@ DEFAULT_USERNAME = "admin"
 # The setup forms' collapsed section holding what has a working default.
 CONF_ADVANCED = "advanced"
 
+# Entry data, optional: the base32 TOTP secret of a unit with two-factor
+# authentication on, as its 2FA setup screen shows it. The client appends the
+# current code to the password on every request. Never logged; redacted from
+# diagnostics.
+CONF_TOTP_SECRET = "totp_secret"
+
 # Entry data: SHA-256 of the certificate the unit presented at its last setup.
 # A discovered address is trusted with the entry's credentials only over a
 # connection presenting this certificate.
@@ -33,9 +39,11 @@ CONF_CERT_SHA256 = "cert_sha256"
 # available as a push stream over /api/ws.
 SCAN_INTERVAL = timedelta(seconds=30)
 
-# The seven sections one poll reads, each from its own endpoint. A section
+# The eight sections one poll reads, each from its own endpoint. A section
 # that fails keeps its last value and its name goes in KvmData.failed, which
 # is what makes the entities reading it unavailable rather than stale.
+# SECTION_SWITCH is the GL-RM4PE's built-in port switch; every other unit
+# answers its endpoint with 404, which is absence, not a failure.
 SECTION_ATX = "atx"
 SECTION_MSD = "msd"
 SECTION_STREAMER = "streamer"
@@ -43,6 +51,7 @@ SECTION_HID = "hid"
 SECTION_GPIO = "gpio"
 SECTION_HEALTH = "health"
 SECTION_WOL = "wol"
+SECTION_SWITCH = "switch"
 SECTIONS = (
     SECTION_ATX,
     SECTION_MSD,
@@ -51,12 +60,14 @@ SECTIONS = (
     SECTION_GPIO,
     SECTION_HEALTH,
     SECTION_WOL,
+    SECTION_SWITCH,
 )
 
 # Zeroconf. The units announce _glinet._tcp.local. with TXT mn=<model>,
 # v=<firmware>, devid and mac=<base64 of the twelve hex digits>. The manifest
-# filters on mn, so only a Comet KVM reaches the flow; the MAC is the only key
-# the announcement shares with the unit's own API.
+# filters on mn (rm10 for the Comet Pro, rm4pe for the Comet X), so only a
+# Comet KVM reaches the flow; the MAC is the only key the announcement shares
+# with the unit's own API.
 ZEROCONF_MAC = "mac"
 
 # Repair issues.
@@ -67,11 +78,19 @@ ISSUE_MSD_OFFLINE = "msd_offline"
 # the first missing poll would make it flap every time someone opened the UI.
 STREAMER_STOPPED_POLLS = 3
 
+# Per-port power on a GL-RM4PE. Each port has its own rear USB-A socket for an
+# ATX board, and switching ports powers only the new port's socket, so after a
+# switch the board there has to enumerate before kvmd reports ATX enabled.
+# How long to wait for that, and how often to ask.
+ATX_PORT_TIMEOUT = 15.0
+ATX_PORT_POLL_INTERVAL = 0.5
+
 # Actions.
 SERVICE_TYPE_TEXT = "type_text"
 SERVICE_SEND_KEYS = "send_keys"
 SERVICE_WAKE = "wake"
 SERVICE_POWER = "power"
+SERVICE_SET_ACTIVE_PORT = "set_active_port"
 
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_TEXT = "text"
@@ -80,6 +99,7 @@ ATTR_KEYS = "keys"
 ATTR_MAC = "mac"
 ATTR_ACTION = "action"
 ATTR_WAIT = "wait"
+ATTR_PORT = "port"
 
 # The four ATX power actions kvmd accepts, in the order its own UI lists them.
 POWER_ACTIONS = ["on", "off", "off_hard", "reset_hard"]

@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable, Iterable
 from typing import NoReturn, override
 
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, Unauthorized
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import GlkvmAuthError, GlkvmError
 from .const import DOMAIN
-from .coordinator import GlkvmCoordinator
-from .models import KvmData
+from .coordinator import GlkvmConfigEntry, GlkvmCoordinator
+from .models import KvmData, SwitchState
 
 
 def raise_from_error(err: GlkvmError) -> NoReturn:
@@ -34,6 +37,33 @@ def raise_from_error(err: GlkvmError) -> NoReturn:
     ) from err
 
 
+def add_switch_entities(
+    entry: GlkvmConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    build: Callable[[SwitchState], Iterable[Entity]],
+) -> None:
+    """Add a platform's port-switch entities once the unit has shown a switch.
+
+    Only a GL-RM4PE has one. Asked again on every refresh, so a switch read
+    that failed at startup still gets its entities when it answers, as the
+    health sensors do; once added they are not added again.
+    """
+    coordinator = entry.runtime_data
+    added = False
+
+    @callback
+    def _add() -> None:
+        nonlocal added
+        switch = coordinator.data.switch if coordinator.data else None
+        if added or switch is None:
+            return
+        added = True
+        async_add_entities(build(switch))
+
+    _add()
+    entry.async_on_unload(coordinator.async_add_listener(_add))
+
+
 class GlkvmEntity(CoordinatorEntity[GlkvmCoordinator]):
     """Base entity for the KVM."""
 
@@ -48,7 +78,7 @@ class GlkvmEntity(CoordinatorEntity[GlkvmCoordinator]):
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.unique_id}_{key}"
         self._attr_device_info = coordinator.device_info
-        # Which of the poll's seven sections this entity reads, if any.
+        # Which of the poll's eight sections this entity reads, if any.
         self._section = section
 
     @property

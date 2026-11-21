@@ -4,6 +4,7 @@ Every step that can show an error is also driven past it: the unit comes
 back, the same flow is resubmitted, and it ends where it should.
 """
 
+import json
 from dataclasses import replace
 from ipaddress import ip_address
 
@@ -27,7 +28,13 @@ from custom_components.glkvm.api import (
     GlkvmResponseError,
 )
 from custom_components.glkvm.config_flow import mac_from_txt, normalise_mac
-from custom_components.glkvm.const import CONF_ADVANCED, CONF_CERT_SHA256, DOMAIN
+from custom_components.glkvm.const import (
+    CONF_ADVANCED,
+    CONF_CERT_SHA256,
+    CONF_TOTP_SECRET,
+    DOMAIN,
+)
+from tests.pure import COMPONENT
 
 from .conftest import (
     ENTRY_DATA,
@@ -64,6 +71,18 @@ def _form(data=ENTRY_DATA):
         **{k: v for k, v in data.items() if k not in _DEFAULTED},
         CONF_ADVANCED: {k: data[k] for k in _DEFAULTED if k in data},
     }
+
+
+def _defaults(advanced: section) -> dict:
+    """What each Advanced field opens holding.
+
+    The TOTP secret is the one field there with no default: it is a secret,
+    so like the password it is never given one. It must be there, empty.
+    """
+    keys = list(advanced.schema.schema)
+    totp = next(k for k in keys if k == CONF_TOTP_SECRET)
+    assert totp.default is vol.UNDEFINED
+    return {str(k): k.default() for k in keys if k is not totp}
 
 
 def _password_is_not_echoed(result) -> None:
@@ -133,7 +152,7 @@ async def test_the_first_form_asks_only_for_the_address_and_password(hass, fake_
     _password_is_not_echoed(result)
     advanced = _advanced(result)
     assert advanced.options["collapsed"] is True
-    defaults = {str(k): k.default() for k in advanced.schema.schema}
+    defaults = _defaults(advanced)
     assert defaults == {CONF_PORT: 443, CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
 
     # Typing the two and pressing Submit is the whole setup.
@@ -235,6 +254,23 @@ async def _discover(hass, info=None):
     )
 
 
+def test_the_manifest_offers_the_comet_pro_and_the_comet_x():
+    manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
+    matchers = manifest["zeroconf"]
+    assert {m["type"] for m in matchers} == {"_glinet._tcp.local."}
+    assert sorted(m["properties"]["mn"] for m in matchers) == ["rm10", "rm4pe"]
+
+
+async def test_a_discovered_comet_x_is_added_the_same_way(hass, fake_client):
+    result = await _discover(hass, _announcement(mn="rm4pe"))
+    assert result["step_id"] == "zeroconf_confirm"
+    done = await hass.config_entries.flow.async_configure(
+        result["flow_id"], frontend_submission(result, {CONF_PASSWORD: "secret"})
+    )
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert done["result"].unique_id == SERIAL
+
+
 def test_the_txt_mac_is_base64_of_the_twelve_hex_digits():
     assert mac_from_txt(UNIT_MAC_TXT) == UNIT_MAC
     # Not base64, base64 of the wrong length, and not a string at all.
@@ -261,7 +297,7 @@ async def test_a_discovered_unit_asks_only_for_its_password_and_is_added(
     _password_is_not_echoed(result)
     advanced = _advanced(result)
     assert advanced.options["collapsed"] is True
-    defaults = {str(k): k.default() for k in advanced.schema.schema}
+    defaults = _defaults(advanced)
     assert defaults == {CONF_USERNAME: "admin", CONF_VERIFY_SSL: False}
 
     done = await hass.config_entries.flow.async_configure(
@@ -352,6 +388,30 @@ async def test_an_announcer_without_the_units_certificate_gets_no_credentials(
     assert result["reason"] == "already_configured"
     assert config_entry.data[CONF_HOST] == HOST
     assert fake_client.reads == []
+
+
+async def test_a_verifying_entry_is_not_moved_to_an_address_its_certificate_lacks(
+    hass, fake_client, config_entry
+):
+    # Set up by a name its own certificate carries, with verification on. The
+    # unit announces its bare IP address; the pin matches there, but the
+    # certificate is not valid for that address, so moving the entry would
+    # make every poll fail verification.
+    _known(hass, config_entry, **{CONF_HOST: "kvm.example.org", CONF_VERIFY_SSL: True})
+    fake_client.certificate_names = {"kvm.example.org"}
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == "kvm.example.org"
+
+
+async def test_a_verifying_entry_follows_an_address_its_certificate_covers(
+    hass, fake_client, config_entry
+):
+    _known(hass, config_entry, **{CONF_HOST: "kvm.example.org", CONF_VERIFY_SSL: True})
+    fake_client.certificate_names = {"kvm.example.org", "192.0.2.30"}
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == "192.0.2.30"
 
 
 async def test_a_unit_at_the_new_address_with_another_serial_is_not_followed(

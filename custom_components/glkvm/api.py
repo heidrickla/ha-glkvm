@@ -17,6 +17,11 @@ every request, so there is no session to expire and nothing to store. A unit
 with authentication disabled ignores the headers. GL.iNet added a lockout
 after repeated failed logins, which is one more reason a caller must stop
 polling on the first 401 rather than retrying with the same credentials.
+
+Two-factor authentication: when the unit has a TOTP secret set, kvmd reads
+the last six characters of the password as the current code. Given the
+secret, the client appends a fresh code to `X-KVMD-Passwd` on every request
+(see totp.py), so header authentication stays stateless.
 """
 
 from __future__ import annotations
@@ -26,7 +31,8 @@ import contextlib
 import hashlib
 import json
 import ssl
-from collections.abc import Iterable, Mapping
+import time
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import aiohttp
@@ -40,9 +46,12 @@ from .models import (
     MsdState,
     NetworkConfig,
     StreamerState,
+    SwitchState,
     SystemInfo,
     WolTarget,
+    port_names_from_config,
 )
+from .totp import normalise_secret, totp
 
 # Reads are small JSON documents; commands may hold a button for seconds
 # (`power_long` holds the ATX power line for about five) when asked to wait.
@@ -107,14 +116,18 @@ class GlkvmClient:
         password: str | None = None,
         verify_ssl: bool = False,
         cert_sha256: str | None = None,
+        totp_secret: str | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self._session = session
         self._host = host
         self._port = port
-        self._headers: dict[str, str] = {}
-        if username:
-            self._headers["X-KVMD-User"] = username
-            self._headers["X-KVMD-Passwd"] = password or ""
+        self._username = username or None
+        self._password = password or ""
+        # Checked here so a malformed secret fails at construction, not as
+        # an opaque error on the first request. Raises ValueError.
+        self._totp_secret = normalise_secret(totp_secret) if totp_secret else None
+        self._clock = clock
         # aiohttp takes ssl=False to skip verification; True means the default
         # context. The unit's certificate is self-signed for "localhost", so
         # the default is off (see const.DEFAULT_VERIFY_SSL).
@@ -137,6 +150,19 @@ class GlkvmClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path if path.startswith('/') else '/' + path}"
 
+    def _auth_headers(self) -> dict[str, str]:
+        """The credential headers for one request, built when it is sent.
+
+        With a TOTP secret the password carries the code valid now, so the
+        headers cannot be computed once and kept.
+        """
+        if not self._username:
+            return {}
+        password = self._password
+        if self._totp_secret is not None:
+            password += totp(self._totp_secret, self._clock())
+        return {"X-KVMD-User": self._username, "X-KVMD-Passwd": password}
+
     # ------------------------------------------------------------ transport
 
     async def _call(
@@ -155,7 +181,7 @@ class GlkvmClient:
                 self._url(path),
                 params=dict(params) if params else None,
                 data=data,
-                headers=self._headers,
+                headers=self._auth_headers(),
                 ssl=self._ssl,
                 timeout=timeout,
             ) as resp:
@@ -344,6 +370,36 @@ class GlkvmClient:
             raise
         return WolTarget.list_from_result(self._mapping(result))
 
+    async def get_switch(self) -> SwitchState | None:
+        """The multi-port switch (GL-RM4PE); None on units without one.
+
+        kvmd registers /api/switch only where the switch hardware exists, so
+        every other Comet answers 404.
+        """
+        try:
+            result = await self._get("/api/switch")
+        except GlkvmResponseError as err:
+            if err.status == 404:
+                return None
+            raise
+        return SwitchState.from_result(self._mapping(result))
+
+    async def get_port_names(self) -> tuple[str | None, ...] | None:
+        """The port names set in GL.iNet's web UI, by 0-based port.
+
+        GL's UI keeps them in its user config (/etc/kvmd/user/config.json),
+        served whole by /api/system/get_config; kvmd's own switch port names
+        do not survive a restart on the RM4PE. Only `port_names` is read out
+        of that document. None where the endpoint or the key is absent.
+        """
+        try:
+            result = await self._get("/api/system/get_config")
+        except GlkvmResponseError as err:
+            if err.status == 404:
+                return None
+            raise
+        return port_names_from_config(self._mapping(result))
+
     async def get_snapshot(self) -> bytes | None:
         """The current frame as JPEG, or None while the streamer has no frame."""
         status, ctype, body = await self._call(
@@ -448,6 +504,15 @@ class GlkvmClient:
         await self._post(
             "/api/gpio/pulse", params={"channel": channel, "wait": _flag(wait)}
         )
+
+    async def switch_set_active(self, port: int) -> None:
+        """Switch the KVM to a port, 0-based on the wire.
+
+        kvmd answers once the switch has happened, about 2.5 s on a GL-RM4PE.
+        """
+        if isinstance(port, bool) or not isinstance(port, int) or port < 0:
+            raise ValueError(f"invalid switch port {port!r}")
+        await self._post("/api/switch/set_active", params={"port": str(port)})
 
     async def wol_wake(self, mac: str) -> None:
         """Send a magic packet from the KVM to a machine on its LAN."""

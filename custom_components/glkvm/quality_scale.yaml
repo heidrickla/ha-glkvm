@@ -3,7 +3,7 @@ rules:
   action-setup:
     status: done
     comment: |
-      The four actions are registered in async_setup, not per entry, so a call
+      The five actions are registered in async_setup, not per entry, so a call
       while the entry is unloaded gets a translated refusal.
   appropriate-polling:
     status: done
@@ -107,12 +107,13 @@ rules:
       Coordinator failure marks everything unavailable, and a partial poll
       marks the sections that failed: every entity carries the section it
       reads and is unavailable while that section is in KvmData.failed, so a
-      timeout or a 500 on one of the seven endpoints shows as unavailable
+      timeout or a 500 on one of the eight endpoints shows as unavailable
       rather than as the last value the unit confirmed. ATX, media and
       capture entities are unavailable in the states the unit reports as
       well. tests/ha/test_partial_polls.py drives each of the seven sections
-      through both failures and checks that its entities, and only its
-      entities, go unavailable and then return with a real value.
+      every unit has through both failures and checks that its entities, and
+      only its entities, go unavailable and then return with a real value;
+      tests/ha/test_switch.py does the same for the Comet X's port switch.
   integration-owner: done
   log-when-unavailable:
     status: done
@@ -148,8 +149,9 @@ rules:
     comment: |
       Zeroconf. Measured from a LAN host on 2026-09-04: the units announce
       _glinet._tcp.local. on 443 with TXT mn=rm10, v=<firmware>, devid and
-      mac=<base64 of the twelve hex digits>. The manifest filters on mn, so
-      only a Comet KVM reaches the flow. The serial an entry is keyed on is
+      mac=<base64 of the twelve hex digits>. The manifest filters on mn
+      (rm10 for the Comet Pro, rm4pe for the Comet X), so only a Comet KVM
+      reaches the flow. The serial an entry is keyed on is
       behind authentication and is in neither the TXT records nor
       /api/info's reach, so the confirm step asks for the login, reads the
       serial and creates the entry keyed on it.

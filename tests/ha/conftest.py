@@ -17,7 +17,8 @@ rather than sent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import pytest
@@ -48,6 +49,7 @@ from custom_components.glkvm.models import (
     MsdState,
     NetworkConfig,
     StreamerState,
+    SwitchState,
     SystemInfo,
     WolTarget,
 )
@@ -60,6 +62,8 @@ WOL_MAC = "02:00:00:00:00:01"
 # mDNS TXT record carries it (base64 of the twelve hex digits).
 UNIT_MAC = "94:83:c4:00:02:15"
 UNIT_MAC_TXT = "OTQ4M2M0MDAwMjE1"
+# A GL-RM4PE's switch, from the shape it answers /api/switch with.
+RM4PE_SWITCH = SwitchState.from_result(result("switch_rm4pe.json"))
 # SHA-256 of the certificate the unit presents, as the entry stores it.
 UNIT_CERT_SHA256 = "5f" * 32
 
@@ -109,10 +113,25 @@ class FakeClient:
     network: NetworkConfig | None = field(
         default_factory=lambda: NetworkConfig.from_result(result("network_config.json"))
     )
+    # The GL-RM10 the fixtures come from has no port switch; a test that
+    # wants one sets RM4PE_SWITCH (and port names) here.
+    switch: SwitchState | None = None
+    port_names: tuple[str | None, ...] | None = None
+    # A GL-RM4PE's ATX board per 0-based port. Only the active port's board
+    # is powered, so when this is set get_atx answers for the active port
+    # (and with ATX disabled for a port that has no board).
+    atx_by_port: dict[int, AtxState] | None = None
+    # Called on every get_atx, before it answers: a test uses it to make a
+    # board enumerate late or to switch the port mid-wait.
+    on_get_atx: Callable[[FakeClient], None] | None = None
     snapshot: bytes | None = b"\xff\xd8\xff\xe0jpeg"
     # The certificate whatever answers presents. A client built pinned to
     # another one fails before any request: see fake_client below.
     cert_sha256: str = UNIT_CERT_SHA256
+    # The addresses that certificate is valid for. None is any address; when
+    # set, a client that verifies the certificate (and is not pinned) fails
+    # against any other address, the way a hostname mismatch does.
+    certificate_names: set[str] | None = None
     # When set, every call raises it - the way a whole unit fails.
     fail: Exception | None = None
     # One read at a time, keyed by the name below - the way a single endpoint
@@ -123,6 +142,8 @@ class FakeClient:
     )
     # Every credentialed read attempted, in order, whether or not it failed.
     reads: list[str] = field(default_factory=list)
+    # The keyword arguments of every GlkvmClient construction, in order.
+    constructed: list[dict[str, Any]] = field(default_factory=list)
 
     def _check(self, read: str | None = None) -> None:
         if read is not None:
@@ -169,6 +190,10 @@ class FakeClient:
 
     async def get_atx(self) -> AtxState:
         self._check("atx")
+        if self.on_get_atx is not None:
+            self.on_get_atx(self)
+        if self.atx_by_port is not None and self.switch is not None:
+            return self.atx_by_port.get(self.switch.active_port or 0, AtxState())
         return self.atx
 
     async def get_msd(self) -> MsdState:
@@ -190,6 +215,14 @@ class FakeClient:
     async def get_wol_targets(self) -> tuple[WolTarget, ...]:
         self._check("wol")
         return self.wol
+
+    async def get_switch(self) -> SwitchState | None:
+        self._check("switch")
+        return self.switch
+
+    async def get_port_names(self) -> tuple[str | None, ...] | None:
+        self._check("port_names")
+        return self.port_names
 
     async def get_snapshot(self) -> bytes | None:
         self._check()
@@ -234,6 +267,11 @@ class FakeClient:
     async def wol_wake(self, mac: str) -> None:
         self._record("wol_wake", mac)
 
+    async def switch_set_active(self, port: int) -> None:
+        self._record("switch_set_active", port)
+        if self.switch is not None:
+            self.switch = replace(self.switch, active_port=port)
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
@@ -260,8 +298,17 @@ def fake_client(monkeypatch) -> FakeClient:
     """Replace the real client wherever it is constructed."""
     fake = FakeClient()
 
-    def client(*_args: Any, cert_sha256: str | None = None, **_kwargs: Any) -> Any:
+    def client(*args: Any, cert_sha256: str | None = None, **kwargs: Any) -> Any:
+        fake.constructed.append({**kwargs, "cert_sha256": cert_sha256})
         if cert_sha256 is not None and cert_sha256 != fake.cert_sha256:
+            return MismatchedCertificateClient()
+        host = args[1] if len(args) > 1 else kwargs.get("host")
+        if (
+            cert_sha256 is None
+            and kwargs.get("verify_ssl")
+            and fake.certificate_names is not None
+            and host not in fake.certificate_names
+        ):
             return MismatchedCertificateClient()
         return fake
 

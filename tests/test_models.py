@@ -219,3 +219,110 @@ def test_keys_that_are_not_names_are_skipped():
         {"devices": [{"name": "no mac"}, {"mac": "02:00:00:00:00:09"}]}
     )
     assert [target.mac for target in wol] == ["02:00:00:00:00:09"]
+
+
+# ---------------------------------------------------------------- switch
+# switch_rm4pe.json is the shape a GL-RM4PE (Comet X) on firmware 1.10.0
+# answers /api/switch with: summary, video and usb_otg links, model ports.
+
+
+def test_switch_state_from_the_rm4pe():
+    state = models.SwitchState.from_result(result("switch_rm4pe.json"))
+    assert state.active_port == 0
+    assert state.active_id == "1.1"
+    assert state.synced is True
+    assert state.video_links == (True, False, True, True)
+    assert state.usb_links == (True, False, False, False)
+    assert state.port_count == 4
+    assert [p.id for p in state.ports] == ["1.1", "1.2", "1.3", "1.4"]
+    assert [p.channel for p in state.ports] == [0, 1, 2, 3]
+    # kvmd's names are empty strings until set; they are no name at all.
+    assert all(p.name is None for p in state.ports)
+    assert state.labels == ("Port 1", "Port 2", "Port 3", "Port 4")
+    assert state.video_link(1) is False
+    assert state.video_link(9) is None
+
+
+def test_no_active_port_is_none_not_minus_one():
+    state = models.SwitchState.from_result({"summary": {"active_port": -1}})
+    assert state.active_port is None
+
+
+def test_a_switch_answer_missing_everything_degrades():
+    state = models.SwitchState.from_result({})
+    assert state.active_port is None
+    assert state.synced is None
+    assert state.port_count == 0
+    assert state.labels == ()
+
+
+def test_a_switch_answer_with_wrong_types_degrades():
+    state = models.SwitchState.from_result(
+        {
+            "summary": {"active_port": "1", "active_id": 7, "synced": "yes"},
+            "video": {"links": [True, "no", None, 1]},
+            "usb_otg": {"links": "nope"},
+            "model": {"ports": [{"id": "1.1", "name": 3}, "junk"]},
+        }
+    )
+    assert state.active_port is None
+    assert state.active_id is None
+    assert state.synced is None
+    assert state.video_links == (True, None, None, None)
+    assert state.usb_links == ()
+    # Two listed ports win over four video links for the count.
+    assert state.port_count == 2
+    assert state.labels == ("Port 1", "Port 2")
+
+
+def test_without_a_ports_list_the_video_links_give_the_count():
+    state = models.SwitchState.from_result({"video": {"links": [True, False]}})
+    assert state.port_count == 2
+
+
+def test_port_names_from_gl_user_config():
+    names = models.port_names_from_config(result("system_get_config.json"))
+    assert names == ("Workstation", None, "Build box", "Media player")
+    assert models.port_names_from_config({"config": {"port_names": ["  ", 4]}}) == (
+        None,
+        None,
+    )
+    assert models.port_names_from_config({"config": {}}) is None
+    assert models.port_names_from_config({}) is None
+
+
+def test_labels_prefer_gl_names_then_kvmd_names_then_port_n():
+    base = models.SwitchState.from_result(
+        {
+            "model": {
+                "ports": [
+                    {"name": "kvmd-a"},
+                    {"name": "kvmd-b"},
+                    {"name": ""},
+                    {"name": None},
+                ]
+            }
+        }
+    )
+    named = base.with_ui_names(("Workstation", None, "", None, "extra"))
+    assert named.labels == ("Workstation", "kvmd-b", "Port 3", "Port 4")
+    assert base.with_ui_names(None).labels == ("kvmd-a", "kvmd-b", "Port 3", "Port 4")
+
+
+def test_repeated_labels_are_made_distinct_by_port_number():
+    state = models.SwitchState.from_result(
+        {"model": {"ports": [{}, {}, {}, {}]}}
+    ).with_ui_names(("PC", "PC", "Port 4", None))
+    assert state.labels == ("PC (1)", "PC (2)", "Port 4 (3)", "Port 4 (4)")
+    assert len(set(state.labels)) == 4
+
+
+def test_a_label_that_still_collides_after_numbering_is_numbered_again():
+    state = models.SwitchState.from_result(
+        {"model": {"ports": [{}, {}, {}]}}
+    ).with_ui_names(("PC (2)", "PC", "PC"))
+    assert len(set(state.labels)) == 3
+
+
+def test_kvm_data_has_no_switch_by_default():
+    assert models.KvmData().switch is None
