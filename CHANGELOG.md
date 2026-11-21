@@ -2,6 +2,21 @@
 
 Everything a user of this integration would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the version numbers are the ones in `manifest.json`. Changes that only move code around, or that touch tests and CI, are not listed unless they change what the integration does.
 
+## [Unreleased]
+
+### Added
+
+- Two-factor authentication. Setup, discovery, reconfigure and reauthentication take an optional two-factor secret (the base32 text shown under the QR code at 2FA setup) in Advanced. With one set, every request sends the password followed by the current six-digit TOTP code, which is what the unit's kvmd checks. Spaces, dashes, lower case and missing padding are accepted; a secret that is not base32 is refused on the form before the unit is asked. Reconfigure keeps the stored secret when the field is left blank; reauthentication takes it as typed, so a blank one there removes it. The secret is never logged, never sent back to the browser, and redacted from diagnostics.
+- The Comet X's built-in port switch. On a unit that has one: an Active port select (options are the port names, picking one switches), an Active port sensor (the port number printed on the unit, 1 to 4), and a Port N video binary sensor per port (a source is plugged in on that HDMI input). Units without the switch, which answer its endpoint with 404, get none of them.
+- Port names from GL.iNet's web UI. The select shows the names set there, then kvmd's own, then "Port 1" to "Port 4"; repeated names get their port number appended. They are read on every poll and never written. Diagnostics redact them.
+- `glkvm.set_active_port` switches a Comet X to a port, numbered from 1 as printed on the unit. It refuses on a unit without the switch and for a port the unit does not have.
+- A Comet X announcing itself over mDNS (`mn=rm4pe`) is discovered, as the Comet Pro is.
+
+### Changed
+
+- A poll reads eight sections; the port switch is the eighth. Only a unit unreachable for all eight is unavailable.
+- `type_text` and `send_keys` are documented as going to the host on the active port on a Comet X.
+
 ## [0.3.0] - 2026-10-30
 
 ### Changed
