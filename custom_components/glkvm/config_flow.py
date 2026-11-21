@@ -458,10 +458,12 @@ class GlkvmConfigFlow(ConfigFlow, domain=DOMAIN):
                 **entry.data,
                 CONF_USERNAME: user_input.get(CONF_USERNAME, ""),
                 CONF_PASSWORD: user_input.get(CONF_PASSWORD, ""),
-                # As typed: blank removes a stored secret, for a unit that
-                # has had two-factor authentication turned off.
-                CONF_TOTP_SECRET: user_input.get(CONF_TOTP_SECRET, ""),
             }
+            # A blank secret keeps the stored one, as reconfigure does. It never
+            # needs clearing when two-factor is turned off: the client reads
+            # that state from the unit and then sends the bare password.
+            if str(user_input.get(CONF_TOTP_SECRET) or "").strip():
+                data[CONF_TOTP_SECRET] = user_input[CONF_TOTP_SECRET]
             errors, unique_id, _title, mac = await self._async_try(data)
             if not errors and unique_id is not None:
                 data = _with_mac(data, mac)

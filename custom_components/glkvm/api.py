@@ -127,6 +127,10 @@ class GlkvmClient:
         # Checked here so a malformed secret fails at construction, not as
         # an opaque error on the first request. Raises ValueError.
         self._totp_secret = normalise_secret(totp_secret) if totp_secret else None
+        # Whether the unit has two-factor on, as check_auth last read it from
+        # /api/2fa/is_enabled. None until read, or where the firmware has no
+        # such endpoint; a stored secret is then used, as before the read.
+        self._twofa_enabled: bool | None = None
         self._clock = clock
         # aiohttp takes ssl=False to skip verification; True means the default
         # context. The unit's certificate is self-signed for "localhost", so
@@ -154,12 +158,15 @@ class GlkvmClient:
         """The credential headers for one request, built when it is sent.
 
         With a TOTP secret the password carries the code valid now, so the
-        headers cannot be computed once and kept.
+        headers cannot be computed once and kept. A unit known to have
+        two-factor off gets the bare password: kvmd would otherwise read the
+        code as part of it, so a secret left stored after 2FA was turned off
+        would fail every login.
         """
         if not self._username:
             return {}
         password = self._password
-        if self._totp_secret is not None:
+        if self._totp_secret is not None and self._twofa_enabled is not False:
             password += totp(self._totp_secret, self._clock())
         return {"X-KVMD-User": self._username, "X-KVMD-Passwd": password}
 
@@ -279,8 +286,25 @@ class GlkvmClient:
         """Raise GlkvmAuthError unless the credentials are accepted.
 
         On a unit with authentication disabled this succeeds with anything.
+        With a TOTP secret stored, it first reads whether the unit has
+        two-factor on, which kvmd answers without credentials, so the check
+        and every request until the next one send the code only when needed.
         """
+        if self._totp_secret is not None:
+            self._twofa_enabled = await self.get_twofa_enabled()
         await self._get("/api/auth/check")
+
+    async def get_twofa_enabled(self) -> bool | None:
+        """Whether the unit has two-factor on; None where the firmware has no
+        /api/2fa/is_enabled or its answer carries no flag."""
+        try:
+            result = await self._get("/api/2fa/is_enabled")
+        except GlkvmResponseError as err:
+            if err.status == 404:
+                return None
+            raise
+        enabled = self._mapping(result).get("enabled")
+        return enabled if isinstance(enabled, bool) else None
 
     async def get_system(self) -> SystemInfo:
         """Serial, versions and hostname.

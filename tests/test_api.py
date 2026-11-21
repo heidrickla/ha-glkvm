@@ -483,12 +483,18 @@ def test_no_read_asks_for_the_extras_section():
 RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # base32 of "12345678901234567890"
 
 
+def _twofa(enabled: bool) -> _Resp:
+    """/api/2fa/is_enabled as kvmd answers it, recorded off on a GL-RM10."""
+    return _json({"ok": True, "result": {"enabled": enabled}})
+
+
 def test_a_totp_secret_appends_the_current_code_to_the_password():
     # RFC 6238's SHA-1 vector at T=59 is 94287082; kvmd checks six digits.
-    session = _Session([_json("auth_check.json")])
+    session = _Session([_twofa(True), _json("auth_check.json")])
     client = _client(session, totp_secret=RFC_SECRET, clock=lambda: 59.0)
     _run(client.check_auth())
-    assert session.calls[0]["headers"] == {
+    assert session.calls[0]["url"] == "https://192.0.2.15/api/2fa/is_enabled"
+    assert session.calls[1]["headers"] == {
         "X-KVMD-User": "admin",
         "X-KVMD-Passwd": "secret287082",
     }
@@ -496,33 +502,85 @@ def test_a_totp_secret_appends_the_current_code_to_the_password():
 
 def test_the_code_is_computed_afresh_for_every_request():
     now = [59.0]
-    session = _Session([_json("auth_check.json"), _json("auth_check.json")])
+    session = _Session([_twofa(True), _json("auth_check.json"), _json("atx.json")])
     client = _client(session, totp_secret=RFC_SECRET, clock=lambda: now[0])
     _run(client.check_auth())
     now[0] = 1111111109.0
-    _run(client.check_auth())
-    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret287082"
-    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret081804"
+    _run(client.get_atx())
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret287082"
+    assert session.calls[2]["headers"]["X-KVMD-Passwd"] == "secret081804"
 
 
 def test_the_secret_is_accepted_as_an_authenticator_app_shows_it():
-    session = _Session([_json("auth_check.json")])
+    session = _Session([_twofa(True), _json("auth_check.json")])
     written = "gezd gnbv gy3t qojq gezd gnbv gy3t qojq"
     client = _client(session, totp_secret=written, clock=lambda: 59.0)
     _run(client.check_auth())
-    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret287082"
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret287082"
 
 
 def test_an_empty_password_with_a_secret_sends_only_the_code():
-    session = _Session([_json("auth_check.json")])
+    session = _Session([_twofa(True), _json("auth_check.json")])
     client = _client(session, password=None, totp_secret=RFC_SECRET, clock=lambda: 59)
     _run(client.check_auth())
-    assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "287082"
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "287082"
+
+
+def test_a_unit_with_two_factor_off_gets_the_bare_password_despite_a_secret():
+    # 2FA turned off on the unit with the secret still stored: kvmd would read
+    # an appended code as part of the password and refuse every login.
+    session = _Session(
+        [_json("twofa_is_enabled.json"), _json("auth_check.json"), _json("atx.json")]
+    )
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: 59.0)
+    _run(client.check_auth())
+    _run(client.get_atx())
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret"
+    assert session.calls[2]["headers"]["X-KVMD-Passwd"] == "secret"
+
+
+def test_two_factor_turned_back_on_is_seen_at_the_next_check():
+    session = _Session(
+        [
+            _twofa(False),
+            _json("auth_check.json"),
+            _twofa(True),
+            _json("auth_check.json"),
+        ]
+    )
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: 59.0)
+    _run(client.check_auth())
+    _run(client.check_auth())
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret"
+    assert session.calls[3]["headers"]["X-KVMD-Passwd"] == "secret287082"
+
+
+def test_firmware_without_the_two_factor_endpoint_still_gets_the_code():
+    session = _Session(
+        [_Resp(404, b"<html>nginx 404</html>", "text/html"), _json("auth_check.json")]
+    )
+    client = _client(session, totp_secret=RFC_SECRET, clock=lambda: 59.0)
+    _run(client.check_auth())
+    assert session.calls[1]["headers"]["X-KVMD-Passwd"] == "secret287082"
+
+
+def test_a_two_factor_answer_without_a_flag_reads_as_unknown():
+    session = _Session([_json({"ok": True, "result": {}})])
+    assert _run(_client(session).get_twofa_enabled()) is None
+
+
+def test_a_two_factor_endpoint_error_other_than_404_fails_the_check():
+    session = _Session([_json("unauthorized.json", status=500)])
+    client = _client(session, totp_secret=RFC_SECRET)
+    with pytest.raises(api.GlkvmResponseError):
+        _run(client.check_auth())
 
 
 def test_a_blank_secret_means_no_second_factor():
+    # Nor a question about it: the 2FA state is read only with a secret stored.
     session = _Session([_json("auth_check.json")])
     _run(_client(session, totp_secret="").check_auth())
+    assert len(session.calls) == 1
     assert session.calls[0]["headers"]["X-KVMD-Passwd"] == "secret"
 
 
@@ -532,10 +590,10 @@ def test_a_malformed_secret_is_refused_at_construction():
 
 
 def test_without_a_username_no_code_is_sent_either():
-    session = _Session([_json("auth_check.json")])
+    session = _Session([_twofa(True), _json("auth_check.json")])
     client = _client(session, username=None, totp_secret=RFC_SECRET)
     _run(client.check_auth())
-    assert session.calls[0]["headers"] == {}
+    assert session.calls[1]["headers"] == {}
 
 
 # ---------------------------------------------------------------- switch

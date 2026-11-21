@@ -89,7 +89,7 @@
         "data_description": {
           "username": "admin on stock firmware, which has no other login.",
           "password": "The KVM's password.",
-          "totp_secret": "The base32 2FA secret, if two-factor authentication is on. Leave empty if it is off; an empty field removes a stored secret."
+          "totp_secret": "The base32 2FA secret, if two-factor authentication is on. Leave empty to keep the current one."
         }
       }
     },

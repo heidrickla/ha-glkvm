@@ -167,16 +167,18 @@ async def test_reconfigure_refuses_a_malformed_secret(hass, fake_client, config_
     assert (key.description or {}).get("suggested_value") in (None, "")
 
 
-async def test_reauth_with_a_blank_secret_removes_it(hass, fake_client, config_entry):
-    # Two-factor turned off on the unit: the stored secret now fails every
-    # login, and reauthentication is where it is cleared.
+async def test_reauth_with_a_blank_secret_keeps_it(hass, fake_client, config_entry):
+    # A password change only: the secret is not typed again, as in reconfigure.
     await _entry_with_secret(hass, config_entry)
     result = await config_entry.start_reauth_flow(hass)
     done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_USERNAME: "admin", CONF_PASSWORD: "secret"}
+        result["flow_id"],
+        {CONF_USERNAME: "admin", CONF_PASSWORD: "new", CONF_TOTP_SECRET: "  "},
     )
     assert done["reason"] == "reauth_successful"
-    assert CONF_TOTP_SECRET not in config_entry.data
+    assert config_entry.data[CONF_TOTP_SECRET] == SECRET
+    assert config_entry.data[CONF_PASSWORD] == "new"
+    assert fake_client.constructed[-1]["totp_secret"] == SECRET
     await hass.async_block_till_done()
 
 
