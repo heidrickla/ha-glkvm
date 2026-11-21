@@ -17,7 +17,8 @@ rather than sent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import pytest
@@ -116,6 +117,13 @@ class FakeClient:
     # wants one sets RM4PE_SWITCH (and port names) here.
     switch: SwitchState | None = None
     port_names: tuple[str | None, ...] | None = None
+    # A GL-RM4PE's ATX board per 0-based port. Only the active port's board
+    # is powered, so when this is set get_atx answers for the active port
+    # (and with ATX disabled for a port that has no board).
+    atx_by_port: dict[int, AtxState] | None = None
+    # Called on every get_atx, before it answers: a test uses it to make a
+    # board enumerate late or to switch the port mid-wait.
+    on_get_atx: Callable[[FakeClient], None] | None = None
     snapshot: bytes | None = b"\xff\xd8\xff\xe0jpeg"
     # The certificate whatever answers presents. A client built pinned to
     # another one fails before any request: see fake_client below.
@@ -178,6 +186,10 @@ class FakeClient:
 
     async def get_atx(self) -> AtxState:
         self._check("atx")
+        if self.on_get_atx is not None:
+            self.on_get_atx(self)
+        if self.atx_by_port is not None and self.switch is not None:
+            return self.atx_by_port.get(self.switch.active_port or 0, AtxState())
         return self.atx
 
     async def get_msd(self) -> MsdState:
@@ -253,6 +265,8 @@ class FakeClient:
 
     async def switch_set_active(self, port: int) -> None:
         self._record("switch_set_active", port)
+        if self.switch is not None:
+            self.switch = replace(self.switch, active_port=port)
 
 
 @pytest.fixture(autouse=True)

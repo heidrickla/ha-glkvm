@@ -69,6 +69,15 @@ power:
       default: true
       selector:
         boolean:
+    port:
+      required: false
+      example: 2
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
 
 set_active_port:
   fields:

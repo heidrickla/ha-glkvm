@@ -256,6 +256,12 @@
     },
     "invalid_port": {
       "message": "{port} is not one of the KVM's ports. It has {count}."
+    },
+    "no_atx_on_port": {
+      "message": "The KVM switched to port {port}, but no ATX board answered there. Each port needs its own board, plugged into that port's USB-A socket on the back."
+    },
+    "port_moved": {
+      "message": "The KVM was switched away from port {port} before the power action could run, so nothing was sent."
     }
   },
   "issues": {
@@ -340,6 +346,10 @@
         "wait": {
           "name": "Wait",
           "description": "Wait for the KVM to finish the action before returning."
+        },
+        "port": {
+          "name": "Port",
+          "description": "GL-RM4PE (Comet X) only: the port whose host to control, numbered as printed on the unit. The KVM switches to that port, waits for the ATX board plugged into that port's USB-A socket, then runs the action, and stays on that port. Leave empty to control the host on the active port."
         }
       }
     },

@@ -78,6 +78,13 @@ ISSUE_MSD_OFFLINE = "msd_offline"
 # the first missing poll would make it flap every time someone opened the UI.
 STREAMER_STOPPED_POLLS = 3
 
+# Per-port power on a GL-RM4PE. Each port has its own rear USB-A socket for an
+# ATX board, and switching ports powers only the new port's socket, so after a
+# switch the board there has to enumerate before kvmd reports ATX enabled.
+# How long to wait for that, and how often to ask.
+ATX_PORT_TIMEOUT = 15.0
+ATX_PORT_POLL_INTERVAL = 0.5
+
 # Actions.
 SERVICE_TYPE_TEXT = "type_text"
 SERVICE_SEND_KEYS = "send_keys"

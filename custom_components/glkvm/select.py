@@ -150,4 +150,7 @@ class GlkvmActivePortSelect(GlkvmEntity, SelectEntity):
                 translation_key="invalid_port",
                 translation_placeholders={"port": option, "count": str(len(labels))},
             )
-        await self._run(self.coordinator.client.switch_set_active(labels.index(option)))
+        async with self.coordinator.port_lock:
+            await self._run(
+                self.coordinator.client.switch_set_active(labels.index(option))
+            )

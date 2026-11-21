@@ -79,6 +79,10 @@ class GlkvmCoordinator(DataUpdateCoordinator[KvmData]):
         self.firmware: FirmwareInfo | None = None
         self._streamer_stopped_polls = 0
         self._entry = entry
+        # Held by everything that switches a GL-RM4PE's port, so per-port
+        # power cannot switch, wait and then press a button on a host another
+        # caller has switched to in the meantime.
+        self.port_lock = asyncio.Lock()
 
     @property
     def unique_id(self) -> str:
