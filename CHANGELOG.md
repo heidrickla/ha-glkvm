@@ -11,11 +11,12 @@ Everything a user of this integration would notice, newest first. The format fol
 - Port names from GL.iNet's web UI. The select shows the names set there, then kvmd's own, then "Port 1" to "Port 4"; repeated names get their port number appended. They are read on every poll and never written. Diagnostics redact them.
 - `glkvm.set_active_port` switches a Comet X to a port, numbered from 1 as printed on the unit. It refuses on a unit without the switch and for a port the unit does not have.
 - A Comet X announcing itself over mDNS (`mn=rm4pe`) is discovered, as the Comet Pro is.
+- Per-port power on a Comet X. `glkvm.power` takes an optional `port`: the KVM switches to that port, waits up to 15 seconds for the ATX board in that port's USB-A socket to appear, checks the port has not moved, and then runs the action. It stays on that port. Without a board on that port nothing is pressed. Switching through the select or `set_active_port` waits for a per-port power action in progress.
 
 ### Changed
 
 - A poll reads eight sections; the port switch is the eighth. Only a unit unreachable for all eight is unavailable.
-- `type_text` and `send_keys` are documented as going to the host on the active port on a Comet X.
+- `type_text`, `send_keys` and the power entities are documented as going to the host on the active port on a Comet X.
 
 ## [0.3.0] - 2026-10-30
 

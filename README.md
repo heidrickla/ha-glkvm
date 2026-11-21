@@ -67,13 +67,14 @@ The five actions are administrator actions. A call from a non-administrator is r
 | `config_entry_id` | yes | The KVM to send the packet from. |
 | `mac` | yes | The target's MAC address, `aa:bb:cc:dd:ee:ff` or `aa-bb-cc-dd-ee-ff`. Anything else is refused before the unit is asked. |
 
-`glkvm.power` is the full set of ATX power actions. It refuses when the unit has no ATX board.
+`glkvm.power` is the full set of ATX power actions. It refuses when the unit has no ATX board. On a Comet X it can target any port's host: see [Per-port power](#per-port-power-comet-x).
 
 | Field | Required | Meaning |
 |---|---|---|
 | `config_entry_id` | yes | The KVM whose host to control. |
 | `action` | yes | `on`, `off` (asks the OS to shut down), `off_hard` (cuts power), `reset_hard`. |
 | `wait` | no, default `true` | Wait for the KVM to finish the action before returning. |
+| `port` | no | Comet X only. The port whose host to control, `1` to `4` as printed on the unit. Without it, the host on the active port. |
 
 `glkvm.set_active_port` switches a Comet X to one of its ports. It refuses on a unit without the port switch, and refuses a port number the unit does not have.
 
@@ -103,6 +104,28 @@ The select and the sensor share a unique id; Home Assistant keys entities by pla
 
 Port names come from GL.iNet's web UI, which stores them in its own user config (`/api/system/get_config`, `port_names`). Where a port has no name there, kvmd's own port name is used, and failing that "Port 1" to "Port 4". Two ports with the same name get their port number appended, `Laptop (1)` and `Laptop (2)`, because a select's options must differ. Names changed in the web UI show at the next poll. The integration never writes names: GL's config endpoint replaces the whole document, and kvmd's `/api/switch/set_port_params` names do not survive a kvmd restart on this unit.
 
+### Per-port power (Comet X)
+
+A Comet X takes one GL.iNet ATX board per port. Each board plugs into the USB-A socket on the back that belongs to its port, and the unit powers only the active port's socket. So only the active port's host can be powered at a time, which is also what GL.iNet's own console says. The Host power switch and the Power button, Hold power button and Reset buttons act on the host on the active port, and follow the switch.
+
+`glkvm.power` with a `port` powers a host on any port:
+
+1. The KVM switches to that port, unless it is already active.
+2. The action waits, for up to 15 seconds, for kvmd to report that port's board present. The board needs to enumerate once its socket is powered.
+3. It checks the KVM is still on that port. Then it runs the action.
+
+The KVM stays on that port afterwards. Switching back straight away would cut the board's USB power, possibly in the middle of a press. If no board answers on that port, or the port was switched away during the wait, nothing is pressed and the action fails with a message saying which. Port switches made through the select or `set_active_port` wait for a per-port power action in progress to finish.
+
+```yaml
+action: glkvm.power
+data:
+  config_entry_id: 0123456789abcdef0123456789abcdef
+  port: 3
+  action: "on"
+```
+
+kvmd also has its own per-port endpoints, `/api/switch/atx/power` and `/api/switch/atx/click`. On GL.iNet's firmware they answer `ok` but do nothing: the RM4PE's switch backend implements them as empty stubs, and the ATX lists in `/api/switch` are always empty. The integration does not use them.
+
 ## Supported devices
 
 | Device | Firmware | Notes |
@@ -110,7 +133,7 @@ Port names come from GL.iNet's web UI, which stores them in its own user config 
 | GL-RM10 Comet Pro | 1.10.0 | Every entity and action is built against recorded answers from this unit. |
 | GL-RM10 Comet Pro | 1.8.1 | No health sensors: that firmware has no `health` section, and a test covers an answer shaped that way. |
 | GL-RM1 Comet | any | Same kvmd fork and API. |
-| GL-RM4PE Comet X | 1.10.0 | Everything above, plus the port switch. The switch and the two-factor login were checked against a live unit with 2FA on; the tests use fixtures in the shape it answers with, not a verbatim recording. |
+| GL-RM4PE Comet X | 1.10.1 | Everything above, plus the port switch and per-port power. The switch and the two-factor login were checked against a live unit with 2FA on; the tests use fixtures in the shape it answers with, not a verbatim recording. Per-port power is built from the unit's firmware (the USB-A sockets' power following the active port was checked live) and GL.iNet's documentation, and has not been run against an ATX board on this model. |
 
 The unit's kvmd is GL.iNet's fork of PiKVM 4.82. Upstream PiKVM units are not a target: the integration relies on GL.iNet's additions (`hdmi.signal`, the ATX board's power reading, the firmware version and hostname endpoints, the Wake-on-LAN list), and degrades where they are absent rather than guessing.
 
@@ -273,7 +296,7 @@ sequence:
 - Power control needs GL.iNet's ATX board. Without it the power switch and the three buttons are unavailable, and the `power` action refuses.
 - Keyboard connected and Mouse connected are lazy. kvmd updates them on the next successful write, so a host that has stopped polling the gadget still reads connected until something is typed.
 - Port names are read-only here. Set them in GL.iNet's web UI; the integration picks them up at the next poll.
-- On a Comet X, the camera, the capture sensors, Video signal and the keyboard and mouse all follow the active port. There is one capture pipeline, not four.
+- On a Comet X, the camera, the capture sensors, Video signal, the keyboard and mouse, and the power entities all follow the active port. There is one capture pipeline, not four, and one ATX board answers at a time.
 - Discovery needs mDNS to reach Home Assistant. The announcement is filtered on the model, so only Comet KVMs are offered; a unit on a segment that does not forward mDNS has to be added by address. A unit whose entry has no stored MAC yet is offered as a new device until its serial is read, at which point it is recognised and its address updated rather than duplicated.
 
 ## Troubleshooting
@@ -292,7 +315,8 @@ sequence:
 | A discovered KVM you already have is offered as a new device | Its entry has no stored MAC yet. Adding it anyway is safe: it is recognised by its serial and updates the entry you have. |
 | Camera and capture sensors unavailable, the rest fine | The streamer is not running on the unit. See known limitations. |
 | Virtual media entities unavailable, the rest fine | The mass-storage gadget is offline. See known limitations. |
-| Power entities unavailable, the rest fine | No ATX board is attached to the unit. |
+| Power entities unavailable, the rest fine | No ATX board is attached to the unit. On a Comet X, none on the active port's USB-A socket. |
+| `power` with a `port` says no ATX board answered | That port has no board in its own USB-A socket on the back, or the board took longer than 15 seconds to appear. |
 | No CPU temperature, CPU usage or Memory usage sensors | The firmware has no health section (1.8.1), or the unit has not answered a health read yet. They appear on the first poll that has one. |
 | A Wake button vanished | The target was removed from the unit's Wake-on-LAN list. |
 | An action fails with "is not loaded" | The KVM's entry is unloaded or still retrying setup. Check its card under Devices & Services. |
