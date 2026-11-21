@@ -160,7 +160,9 @@ async def _power_on_port(
         if current is None or current.active_port != index:
             await client.switch_set_active(index)
         if await _wait_for_atx(coordinator) is None:
-            raise ServiceValidationError(
+            # What the unit did, not what the call asked for: the call was
+            # valid and the KVM has switched, so this is no validation error.
+            raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="no_atx_on_port",
                 translation_placeholders={"port": str(port)},

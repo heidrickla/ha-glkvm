@@ -96,9 +96,12 @@ async def test_waits_for_the_board_to_enumerate(hass, rm4pe, config_entry):
 
 async def test_a_port_without_a_board_sends_nothing(hass, rm4pe, config_entry):
     await setup_entry(hass, config_entry)
-    with pytest.raises(ServiceValidationError, match="no ATX board answered") as err:
+    with pytest.raises(HomeAssistantError, match="no ATX board answered") as err:
         await _power(hass, config_entry, "off_hard", **{ATTR_PORT: 2})
     assert err.value.translation_key == "no_atx_on_port"
+    # The call was valid and the KVM switched: a device condition, not a
+    # validation error (ServiceValidationError subclasses HomeAssistantError).
+    assert not isinstance(err.value, ServiceValidationError)
     assert "atx_power" not in rm4pe.names()
     assert rm4pe.names() == ["switch_set_active"]
 
