@@ -13,6 +13,10 @@ Everything a user of this integration would notice, newest first. The format fol
 - A Comet X announcing itself over mDNS (`mn=rm4pe`) is discovered, as the Comet Pro is.
 - Per-port power on a Comet X. `glkvm.power` takes an optional `port`: the KVM switches to that port, waits up to 15 seconds for the ATX board in that port's USB-A socket to appear, checks the port has not moved, and then runs the action. It stays on that port. Without a board on that port nothing is pressed. Switching through the select or `set_active_port` waits for a per-port power action in progress.
 
+### Fixed
+
+- A unit set up by a name its certificate carries, with the certificate check on, is no longer moved by discovery to the bare IP address it announces. The pin matched there, but the certificate is not valid for that address, so every poll after the move failed verification. An entry that verifies the certificate now follows a discovered address only when the certificate is valid for it.
+
 ### Changed
 
 - A poll reads eight sections; the port switch is the eighth. Only a unit unreachable for all eight is unavailable.

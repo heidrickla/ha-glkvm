@@ -108,14 +108,25 @@ async def _is_same_unit(hass: HomeAssistant, entry: ConfigEntry, host: str) -> b
     unit's MAC. The entry's credentials go to the new address only over a
     connection presenting the certificate stored at the entry's last setup,
     and the serial read there must be the entry's unique id.
+
+    An entry that verifies the certificate is followed only to an address
+    the certificate is valid for. The pin checks the certificate's digest,
+    not the name in it, so without this a unit set up by a name its own
+    certificate carries would be moved to the bare IP address it announces,
+    and every poll after that would fail verification.
     """
     pinned = _pinned_certificate(entry)
     if pinned is None:
         return False
-    client = _client(hass, {**entry.data, CONF_HOST: host}, cert_sha256=pinned)
+    data = {**entry.data, CONF_HOST: host}
+    client = _client(hass, data, cert_sha256=pinned)
     try:
         await client.check_auth()
         system = await client.get_system()
+        if data.get(CONF_VERIFY_SSL):
+            # The same unit (the pin held), now with the check the entry
+            # will make on every poll.
+            await _client(hass, data).check_auth()
     except GlkvmError as err:
         _LOGGER.debug("Not following the entry to %s: %s", host, err)
         return False

@@ -390,6 +390,30 @@ async def test_an_announcer_without_the_units_certificate_gets_no_credentials(
     assert fake_client.reads == []
 
 
+async def test_a_verifying_entry_is_not_moved_to_an_address_its_certificate_lacks(
+    hass, fake_client, config_entry
+):
+    # Set up by a name its own certificate carries, with verification on. The
+    # unit announces its bare IP address; the pin matches there, but the
+    # certificate is not valid for that address, so moving the entry would
+    # make every poll fail verification.
+    _known(hass, config_entry, **{CONF_HOST: "kvm.example.org", CONF_VERIFY_SSL: True})
+    fake_client.certificate_names = {"kvm.example.org"}
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == "kvm.example.org"
+
+
+async def test_a_verifying_entry_follows_an_address_its_certificate_covers(
+    hass, fake_client, config_entry
+):
+    _known(hass, config_entry, **{CONF_HOST: "kvm.example.org", CONF_VERIFY_SSL: True})
+    fake_client.certificate_names = {"kvm.example.org", "192.0.2.30"}
+    result = await _discover(hass)
+    assert result["reason"] == "already_configured"
+    assert config_entry.data[CONF_HOST] == "192.0.2.30"
+
+
 async def test_a_unit_at_the_new_address_with_another_serial_is_not_followed(
     hass, fake_client, config_entry
 ):

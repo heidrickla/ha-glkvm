@@ -128,6 +128,10 @@ class FakeClient:
     # The certificate whatever answers presents. A client built pinned to
     # another one fails before any request: see fake_client below.
     cert_sha256: str = UNIT_CERT_SHA256
+    # The addresses that certificate is valid for. None is any address; when
+    # set, a client that verifies the certificate (and is not pinned) fails
+    # against any other address, the way a hostname mismatch does.
+    certificate_names: set[str] | None = None
     # When set, every call raises it - the way a whole unit fails.
     fail: Exception | None = None
     # One read at a time, keyed by the name below - the way a single endpoint
@@ -294,9 +298,17 @@ def fake_client(monkeypatch) -> FakeClient:
     """Replace the real client wherever it is constructed."""
     fake = FakeClient()
 
-    def client(*_args: Any, cert_sha256: str | None = None, **kwargs: Any) -> Any:
+    def client(*args: Any, cert_sha256: str | None = None, **kwargs: Any) -> Any:
         fake.constructed.append({**kwargs, "cert_sha256": cert_sha256})
         if cert_sha256 is not None and cert_sha256 != fake.cert_sha256:
+            return MismatchedCertificateClient()
+        host = args[1] if len(args) > 1 else kwargs.get("host")
+        if (
+            cert_sha256 is None
+            and kwargs.get("verify_ssl")
+            and fake.certificate_names is not None
+            and host not in fake.certificate_names
+        ):
             return MismatchedCertificateClient()
         return fake
 
